@@ -8,12 +8,13 @@ Your repository is ready at: **https://github.com/metaloys/pipulse**
 
 ## 📋 What You Have Ready
 
-✅ All code pushed to GitHub main branch  
+✅ All code pushed to GitHub  
 ✅ Admin button visible in header  
 ✅ Payment system working  
 ✅ Admin dashboard ready (password: `pipulse_admin_2024`)  
 ✅ Dispute resolution system included  
 ✅ Pi Browser detection active  
+⭐ **IMPORTANT: Environment Variables Guide Ready** → `ENVIRONMENT_VARIABLES_SETUP.md`
 
 ---
 
@@ -32,7 +33,10 @@ Your repository is ready at: **https://github.com/metaloys/pipulse**
 3. **Configure Project:**
    - Framework: Next.js ✅ (auto-detected)
    - Root Directory: ./ (default)
-   - Environment Variables: (leave blank for now)
+   - **Environment Variables: ADD THESE 2** ⭐
+     - `NEXT_PUBLIC_SUPABASE_URL` = (from Supabase Settings → API)
+     - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = (from Supabase Settings → API)
+     - See: `ENVIRONMENT_VARIABLES_SETUP.md` for exact instructions
    - Click "Deploy"
 
 4. **Done!** ✅
