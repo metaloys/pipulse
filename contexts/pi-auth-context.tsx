@@ -223,7 +223,6 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [appId, setAppId] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
-  const [authTimeoutId, setAuthTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchProducts = async (currentAppId: string): Promise<void> => {
     try {
@@ -328,35 +327,6 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   const initializePiAndAuthenticate = async () => {
     setError(null);
     setHasError(false);
-    
-    // Clear any existing timeout
-    if (authTimeoutId !== null) {
-      clearTimeout(authTimeoutId);
-    }
-
-    // Set a 15-second timeout to fallback to demo mode (gives Pi SDK time to load)
-    const timeoutId = setTimeout(() => {
-      console.warn("⏱️ Authentication timeout - falling back to demo mode");
-      setAuthMessage("Entering demo mode (Pi authentication timed out)...");
-      
-      const mockUser: LoginDTO = {
-        id: "demo-user",
-        username: "demo_user",
-        credits_balance: 10,
-        terms_accepted: true,
-        app_id: "pipulse-demo",
-      };
-      
-      setPiAccessToken("demo-token");
-      setApiAuthToken("demo-token");
-      setUserData(mockUser);
-      setAppId(mockUser.app_id);
-      setIsAuthenticated(true);
-      setHasError(false);
-      initializeGlobalPayment();
-    }, 15000);
-
-    setAuthTimeoutId(timeoutId);
 
     try {
       // Probe for parent credentials (App Studio iframe environment)
@@ -375,8 +345,11 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
         if (piSdkAvailable) {
           // Pi SDK is available - we're in Pi Browser
           console.log("🔄 Authenticating with Pi Network SDK...");
-          setAuthMessage("Authenticating with Pi Network...");
+          console.log("📝 Waiting for user to complete Pi Browser authentication dialog...");
+          console.log("⏱️ This may take 10-30 seconds, please wait...");
+          setAuthMessage("Authenticating with Pi Network... (Please wait)");
           await authenticateViaPiSdk();
+          console.log("✅ Pi Network authentication successful!");
         } else {
           // Pi SDK not available - not in Pi Browser
           console.log("⚠️ Pi SDK not available - using demo mode");
@@ -396,12 +369,6 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
           setUserData(mockUser);
           setAppId(mockUser.app_id);
         }
-      }
-
-      // Clear timeout since auth completed successfully
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        setAuthTimeoutId(null);
       }
 
       setIsAuthenticated(true);
