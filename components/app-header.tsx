@@ -3,7 +3,8 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { usePiAuth } from '@/contexts/pi-auth-context';
-import { UserCircle, Flame } from 'lucide-react';
+import { UserCircle, Flame, Lock } from 'lucide-react';
+import Link from 'next/link';
 import type { UserRole } from '@/lib/types';
 
 interface AppHeaderProps {
@@ -31,6 +32,17 @@ export function AppHeader({ userRole, onRoleSwitch, currentStreak }: AppHeaderPr
         </div>
 
         <div className="flex items-center gap-3">
+          <Link href="/admin">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-full text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+              title="Admin Dashboard"
+            >
+              <Lock className="w-4 h-4 mr-1" />
+              <span className="text-xs hidden sm:inline">Admin</span>
+            </Button>
+          </Link>
           <Button
             variant="outline"
             size="sm"
