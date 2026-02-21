@@ -236,19 +236,32 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginToBackend = async (accessToken: string, appId: string | null): Promise<LoginDTO> => {
-    let endpoint: string;
-    let payload: { pi_auth_token: string; app_id?: string };
+    console.log("🔐 Verifying Pi Network user with official API...");
+    
+    const response = await fetch(BACKEND_URLS.LOGIN, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'X-Pi-App-Id': process.env.NEXT_PUBLIC_PI_APP_ID || '',
+      },
+    });
 
-    if (appId) {
-      endpoint = BACKEND_URLS.LOGIN_PREVIEW;
-      payload = { pi_auth_token: accessToken, app_id: appId };
-    } else {
-      endpoint = BACKEND_URLS.LOGIN;
-      payload = { pi_auth_token: accessToken };
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("❌ Pi Network verification failed:", response.status, errorData);
+      throw new Error(`Failed to verify Pi Network user (${response.status})`);
     }
 
-    const loginRes = await api.post<LoginDTO>(endpoint, payload);
-    return loginRes.data;
+    const piUser = await response.json();
+    console.log("✅ Pi Network user verified:", piUser.username);
+
+    return {
+      id: piUser.uid,
+      username: piUser.username,
+      credits_balance: 0,
+      terms_accepted: true,
+      app_id: appId || '',
+    };
   };
 
   const authenticateAndLogin = async (accessToken: string, appId: string | null): Promise<void> => {

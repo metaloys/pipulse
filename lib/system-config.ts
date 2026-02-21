@@ -4,21 +4,20 @@ export const PI_NETWORK_CONFIG = {
 } as const;
 
 export const BACKEND_CONFIG = {
-  BASE_URL: "https://backend.appstudio-u7cm9zhmha0ruwv8.piappengine.com",
-  BLOCKCHAIN_BASE_URL: "https://api.testnet.minepi.com",
+  BASE_URL: "https://api.minepi.com",
+  BLOCKCHAIN_BASE_URL: "https://api.mainnet.minepi.com",
 } as const;
 
 export const BACKEND_URLS = {
-  LOGIN: `${BACKEND_CONFIG.BASE_URL}/v1/login`,
-  LOGIN_PREVIEW: `${BACKEND_CONFIG.BASE_URL}/v1/login/preview`,
-  GET_PRODUCTS: (appId: string) =>
-    `${BACKEND_CONFIG.BASE_URL}/v1/apps/${appId}/products`,
+  LOGIN: `${BACKEND_CONFIG.BASE_URL}/v2/me`,
+  LOGIN_PREVIEW: `${BACKEND_CONFIG.BASE_URL}/v2/me`,
+  GET_PRODUCTS: (appId: string) => ``,
   GET_PAYMENT: (paymentId: string) =>
-    `${BACKEND_CONFIG.BASE_URL}/proxy/v2/payments/${paymentId}`,
+    `${BACKEND_CONFIG.BASE_URL}/v2/payments/${paymentId}`,
   APPROVE_PAYMENT: (paymentId: string) =>
-    `${BACKEND_CONFIG.BASE_URL}/proxy/v2/payments/${paymentId}/approve`,
+    `${BACKEND_CONFIG.BASE_URL}/v2/payments/${paymentId}/approve`,
   COMPLETE_PAYMENT: (paymentId: string) =>
-    `${BACKEND_CONFIG.BASE_URL}/proxy/v2/payments/${paymentId}/complete`,
+    `${BACKEND_CONFIG.BASE_URL}/v2/payments/${paymentId}/complete`,
 } as const;
 
 export const PI_PLATFORM_URLS = {} as const;
