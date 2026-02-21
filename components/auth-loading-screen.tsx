@@ -35,7 +35,7 @@ export function AuthLoadingScreen() {
 
         <div className="space-y-2">
           <h2 className="text-2xl font-semibold">
-            {hasError ? "Authentication Failed" : "Pi Network Authentication"}
+            {hasError ? "Authentication Failed" : "Loading PiPulse"}
           </h2>
           <p
             className={`text-sm ${
@@ -44,6 +44,11 @@ export function AuthLoadingScreen() {
           >
             {authMessage}
           </p>
+          {!hasError && (
+            <p className="text-xs text-muted-foreground/60 mt-4">
+              If this takes longer than 5 seconds, you may be viewing on a non-Pi browser. Using demo mode...
+            </p>
+          )}
         </div>
 
         {hasError && (

@@ -185,6 +185,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [appId, setAppId] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
+  const [authTimeoutId, setAuthTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchProducts = async (currentAppId: string): Promise<void> => {
     try {
@@ -243,53 +244,125 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   };
 
   const authenticateViaPiSdk = async (): Promise<void> => {
-    setAuthMessage("Initializing Pi Network...");
-    await window.Pi.init({
-      version: "2.0",
-      sandbox: PI_NETWORK_CONFIG.SANDBOX,
-    });
+    try {
+      setAuthMessage("Initializing Pi Network SDK...");
+      console.log("📍 Initializing Pi SDK with config:", PI_NETWORK_CONFIG);
+      
+      await window.Pi.init({
+        version: "2.0",
+        sandbox: PI_NETWORK_CONFIG.SANDBOX,
+      });
+      console.log("✅ Pi SDK initialized successfully");
 
-    setAuthMessage("Authenticating with Pi Network...");
-    const scopes = ["username", "payments"];
-    const piAuthResult = await window.Pi.authenticate(
-      scopes,
-      async (payment) => {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        await checkIncompletePayments(payment);
+      setAuthMessage("Authenticating with Pi Network...");
+      const scopes = ["username", "payments"];
+      console.log("🔑 Requesting authentication with scopes:", scopes);
+      
+      const piAuthResult = await window.Pi.authenticate(
+        scopes,
+        async (payment) => {
+          console.log("💳 Payment received during auth:", payment);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          await checkIncompletePayments(payment);
+        }
+      );
+
+      console.log("📦 Authentication result:", {
+        hasAccessToken: !!piAuthResult.accessToken,
+        username: piAuthResult.user?.username,
+      });
+
+      if (!piAuthResult.accessToken) {
+        throw new Error(DEFAULT_ERROR_MESSAGE);
       }
-    );
 
-    if (!piAuthResult.accessToken) {
-      throw new Error(DEFAULT_ERROR_MESSAGE);
+      await authenticateAndLogin(piAuthResult.accessToken, null);
+    } catch (err) {
+      console.error("❌ Pi SDK authentication error:", err);
+      if (err instanceof Error) {
+        console.error("Error message:", err.message);
+        console.error("Error stack:", err.stack);
+      }
+      throw err;
     }
-
-    await authenticateAndLogin(piAuthResult.accessToken, null);
   };
 
   const initializePiAndAuthenticate = async () => {
     setError(null);
     setHasError(false);
+    
+    // Clear any existing timeout
+    if (authTimeoutId !== null) {
+      clearTimeout(authTimeoutId);
+    }
+
+    // Set a 10-second timeout to fallback to demo mode
+    const timeoutId = setTimeout(() => {
+      console.warn("⏱️ Authentication timeout - falling back to demo mode");
+      setAuthMessage("Entering demo mode (Pi authentication timed out)...");
+      
+      const mockUser: LoginDTO = {
+        id: "demo-user",
+        username: "demo_user",
+        credits_balance: 10,
+        terms_accepted: true,
+        app_id: "pipulse-demo",
+      };
+      
+      setPiAccessToken("demo-token");
+      setApiAuthToken("demo-token");
+      setUserData(mockUser);
+      setAppId(mockUser.app_id);
+      setIsAuthenticated(true);
+      setHasError(false);
+      initializeGlobalPayment();
+    }, 10000);
+
+    setAuthTimeoutId(timeoutId);
+
     try {
+      // Check if Pi SDK is available (running on Pi Browser)
+      const isPiBrowserAvailable = typeof window.Pi !== "undefined";
+      
+      console.log("🔍 Pi Browser available:", isPiBrowserAvailable);
+      
       // Probe for parent credentials (App Studio iframe environment)
       const parentCredentials = await requestParentCredentials();
+      console.log("📋 Parent credentials available:", !!parentCredentials);
 
       // If parent (App Studio) provides credentials, use iframe flow
       if (parentCredentials) {
+        console.log("✅ Using parent credentials from App Studio");
         await authenticateAndLogin(parentCredentials.accessToken, parentCredentials.appId);
-      } else {
-        // Fallback to Pi SDK authentication
-        setAuthMessage("Loading Pi Network SDK...");
-
-        // Only load if not already loaded
-        if (typeof window.Pi === "undefined") {
-          await loadPiSDK();
-        }
-
-        if (typeof window.Pi === "undefined") {
-          throw new Error("SDK failed to load: Pi object not available after script load");
-        }
-
+      } else if (isPiBrowserAvailable) {
+        // If Pi SDK is already available, use it directly
+        console.log("🔄 Authenticating with Pi Network SDK...");
+        setAuthMessage("Authenticating with Pi Network...");
         await authenticateViaPiSdk();
+      } else {
+        // Not in Pi Browser and no parent credentials
+        console.log("⚠️ Pi SDK not available - using demo mode");
+        setAuthMessage("Entering demo mode (Pi Browser not detected)...");
+        
+        // Create a mock user for testing
+        const mockUser: LoginDTO = {
+          id: "demo-user",
+          username: "demo_user",
+          credits_balance: 10,
+          terms_accepted: true,
+          app_id: "pipulse-demo",
+        };
+        
+        setPiAccessToken("demo-token");
+        setApiAuthToken("demo-token");
+        setUserData(mockUser);
+        setAppId(mockUser.app_id);
+      }
+
+      // Clear timeout since auth completed successfully
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        setAuthTimeoutId(null);
       }
 
       setIsAuthenticated(true);
@@ -299,6 +372,9 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       initializeGlobalPayment();
     } catch (err) {
       console.error("❌ Pi Network initialization failed:", err);
+      if (err instanceof Error) {
+        console.error("Error details:", err.message, err.stack);
+      }
       setHasError(true);
       const errorMessage = getErrorMessage(err);
       setAuthMessage(errorMessage);
