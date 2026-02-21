@@ -1,0 +1,120 @@
+export type TaskCategory = 
+  | 'app-testing'
+  | 'survey'
+  | 'translation'
+  | 'audio-recording'
+  | 'photo-capture'
+  | 'content-review'
+  | 'data-labeling';
+
+export type TaskStatus = 'available' | 'in-progress' | 'submitted' | 'completed' | 'rejected';
+
+export type UserRole = 'worker' | 'employer';
+
+// Supabase Database Types
+export interface DatabaseUser {
+  id: string;
+  pi_username: string;
+  pi_wallet_address: string;
+  user_role: UserRole;
+  level: 'Newcomer' | 'Established' | 'Advanced' | 'Elite Pioneer';
+  current_streak: number;
+  longest_streak: number;
+  last_active_date: string;
+  total_earnings: number;
+  total_tasks_completed: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DatabaseTask {
+  id: string;
+  title: string;
+  description: string;
+  category: TaskCategory;
+  pi_reward: number;
+  time_estimate: number;
+  requirements: string[];
+  slots_available: number;
+  slots_remaining: number;
+  deadline: string;
+  employer_id: string;
+  task_status: 'available' | 'in-progress' | 'completed' | 'cancelled';
+  instructions: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DatabaseTaskSubmission {
+  id: string;
+  task_id: string;
+  worker_id: string;
+  proof_content: string;
+  submission_type: 'text' | 'photo' | 'audio' | 'file';
+  submission_status: 'pending' | 'approved' | 'rejected' | 'resubmitted';
+  rejection_reason: string | null;
+  submitted_at: string;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DatabaseTransaction {
+  id: string;
+  sender_id: string | null;
+  receiver_id: string;
+  amount: number;
+  pipulse_fee: number;
+  task_id: string | null;
+  transaction_type: 'payment' | 'refund' | 'fee' | 'bonus';
+  transaction_status: 'pending' | 'completed' | 'failed';
+  pi_blockchain_txid: string | null;
+  timestamp: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DatabaseStreak {
+  id: string;
+  user_id: string;
+  current_streak: number;
+  longest_streak: number;
+  last_active_date: string;
+  streak_bonus_earned: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  category: TaskCategory;
+  piReward: number;
+  timeEstimate: number; // in minutes
+  requirements: string[];
+  slots: number;
+  slotsRemaining: number;
+  deadline: string;
+  employerId: string;
+  employerName: string;
+  status: TaskStatus;
+  instructions: string;
+}
+
+export interface UserStats {
+  dailyEarnings: number;
+  weeklyEarnings: number;
+  totalEarnings: number;
+  tasksCompleted: number;
+  currentStreak: number;
+  level: string;
+  availableTasksCount: number;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  username: string;
+  earnings: number;
+  tasksCompleted: number;
+}
