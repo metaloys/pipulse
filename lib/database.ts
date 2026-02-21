@@ -484,3 +484,170 @@ export async function updateTransactionStatus(transactionId: string, status: 'co
 
   return data as DatabaseTransaction;
 }
+
+// ============ DISPUTES ============
+
+/**
+ * Create a new dispute when worker appeals a rejection
+ */
+export async function createDispute(dispute: Omit<DatabaseDispute, 'id' | 'created_at' | 'updated_at'>) {
+  const { data, error } = await supabase
+    .from('disputes')
+    .insert([dispute])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating dispute:', error);
+    return null;
+  }
+  return data as DatabaseDispute;
+}
+
+/**
+ * Get all disputes for admin review
+ */
+export async function getAllDisputes() {
+  const { data, error } = await supabase
+    .from('disputes')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching disputes:', error);
+    return [];
+  }
+  return data as DatabaseDispute[];
+}
+
+/**
+ * Get pending disputes (not yet ruled on)
+ */
+export async function getPendingDisputes() {
+  const { data, error } = await supabase
+    .from('disputes')
+    .select('*')
+    .eq('dispute_status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching pending disputes:', error);
+    return [];
+  }
+  return data as DatabaseDispute[];
+}
+
+/**
+ * Get disputes for a specific worker
+ */
+export async function getWorkerDisputes(workerId: string) {
+  const { data, error } = await supabase
+    .from('disputes')
+    .select('*')
+    .eq('worker_id', workerId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching worker disputes:', error);
+    return [];
+  }
+  return data as DatabaseDispute[];
+}
+
+/**
+ * Get disputes for a specific employer
+ */
+export async function getEmployerDisputes(employerId: string) {
+  const { data, error } = await supabase
+    .from('disputes')
+    .select('*')
+    .eq('employer_id', employerId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching employer disputes:', error);
+    return [];
+  }
+  return data as DatabaseDispute[];
+}
+
+/**
+ * Get a specific dispute by ID
+ */
+export async function getDisputeById(disputeId: string) {
+  const { data, error } = await supabase
+    .from('disputes')
+    .select('*')
+    .eq('id', disputeId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching dispute:', error);
+    return null;
+  }
+  return data as DatabaseDispute;
+}
+
+/**
+ * Admin rules on a dispute
+ */
+export async function resolveDispute(
+  disputeId: string,
+  ruling: 'in_favor_of_worker' | 'in_favor_of_employer',
+  adminNotes: string,
+  adminId: string
+) {
+  const { data, error } = await supabase
+    .from('disputes')
+    .update({
+      dispute_status: 'resolved',
+      admin_ruling: ruling,
+      admin_notes: adminNotes,
+      admin_id: adminId,
+      resolved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', disputeId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error resolving dispute:', error);
+    return null;
+  }
+  return data as DatabaseDispute;
+}
+
+/**
+ * Check if a submission has an active dispute
+ */
+export async function hasActiveDispute(submissionId: string) {
+  const { data, error } = await supabase
+    .from('disputes')
+    .select('id')
+    .eq('submission_id', submissionId)
+    .eq('dispute_status', 'pending')
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error checking dispute:', error);
+    return false;
+  }
+  return !!data;
+}
+
+/**
+ * Count pending disputes
+ */
+export async function getPendingDisputeCount() {
+  const { data, error } = await supabase
+    .from('disputes')
+    .select('*', { count: 'exact', head: true })
+    .eq('dispute_status', 'pending');
+
+  if (error) {
+    console.error('Error counting disputes:', error);
+    return 0;
+  }
+  return data.length;
+}

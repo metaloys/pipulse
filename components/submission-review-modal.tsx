@@ -182,6 +182,12 @@ export function SubmissionReviewModal({
                   {submission.rejection_reason}
                 </p>
               </div>
+              <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <p className="text-xs text-blue-300">
+                  💡 <strong>Note:</strong> The worker can dispute this rejection by providing additional context.
+                  PiPulse admins will review disputes and make final determinations.
+                </p>
+              </div>
             </div>
           )}
 

@@ -85,6 +85,24 @@ export interface DatabaseStreak {
   updated_at: string;
 }
 
+export interface DatabaseDispute {
+  id: string;
+  submission_id: string;
+  task_id: string;
+  worker_id: string;
+  employer_id: string;
+  dispute_reason: string;
+  original_rejection_reason: string | null;
+  dispute_status: 'pending' | 'resolved' | 'dismissed' | 'approved';
+  admin_ruling: 'in_favor_of_worker' | 'in_favor_of_employer' | null;
+  admin_notes: string | null;
+  admin_id: string | null;
+  pi_amount_in_dispute: number;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}
+
 export interface Task {
   id: string;
   title: string;
