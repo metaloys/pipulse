@@ -108,6 +108,44 @@ const loadPiSDK = (): Promise<void> => {
 };
 
 /**
+ * Waits for window.Pi to be available (for up to 5 seconds)
+ * The Pi Browser loads the SDK asynchronously, so we need to wait for it
+ * 
+ * @returns {Promise<boolean>} Returns true if Pi SDK became available, false if timeout
+ */
+function waitForPiSDK(): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Check if already available
+    if (typeof window.Pi !== "undefined") {
+      console.log("✅ Pi SDK already available");
+      resolve(true);
+      return;
+    }
+
+    // Check every 100ms for up to 5 seconds
+    let attempts = 0;
+    const maxAttempts = 50; // 50 * 100ms = 5 seconds
+
+    const timer = setInterval(() => {
+      attempts++;
+      
+      if (typeof window.Pi !== "undefined") {
+        console.log(`✅ Pi SDK detected after ${attempts * 100}ms`);
+        clearInterval(timer);
+        resolve(true);
+        return;
+      }
+
+      if (attempts >= maxAttempts) {
+        console.log("⏱️ Pi SDK not available after 5 seconds");
+        clearInterval(timer);
+        resolve(false);
+      }
+    }, 100);
+  });
+}
+
+/**
  * Requests authentication credentials from the parent window (App Studio) via postMessage.
  * Returns null if not in iframe, timeout, or missing token (non-fatal check).
  *
@@ -296,7 +334,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(authTimeoutId);
     }
 
-    // Set a 10-second timeout to fallback to demo mode
+    // Set a 15-second timeout to fallback to demo mode (gives Pi SDK time to load)
     const timeoutId = setTimeout(() => {
       console.warn("⏱️ Authentication timeout - falling back to demo mode");
       setAuthMessage("Entering demo mode (Pi authentication timed out)...");
@@ -316,16 +354,11 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       setIsAuthenticated(true);
       setHasError(false);
       initializeGlobalPayment();
-    }, 10000);
+    }, 15000);
 
     setAuthTimeoutId(timeoutId);
 
     try {
-      // Check if Pi SDK is available (running on Pi Browser)
-      const isPiBrowserAvailable = typeof window.Pi !== "undefined";
-      
-      console.log("🔍 Pi Browser available:", isPiBrowserAvailable);
-      
       // Probe for parent credentials (App Studio iframe environment)
       const parentCredentials = await requestParentCredentials();
       console.log("📋 Parent credentials available:", !!parentCredentials);
@@ -334,29 +367,35 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       if (parentCredentials) {
         console.log("✅ Using parent credentials from App Studio");
         await authenticateAndLogin(parentCredentials.accessToken, parentCredentials.appId);
-      } else if (isPiBrowserAvailable) {
-        // If Pi SDK is already available, use it directly
-        console.log("🔄 Authenticating with Pi Network SDK...");
-        setAuthMessage("Authenticating with Pi Network...");
-        await authenticateViaPiSdk();
       } else {
-        // Not in Pi Browser and no parent credentials
-        console.log("⚠️ Pi SDK not available - using demo mode");
-        setAuthMessage("Entering demo mode (Pi Browser not detected)...");
+        // Wait for Pi SDK to load (up to 5 seconds)
+        console.log("⏳ Waiting for Pi SDK to load...");
+        const piSdkAvailable = await waitForPiSDK();
         
-        // Create a mock user for testing
-        const mockUser: LoginDTO = {
-          id: "demo-user",
-          username: "demo_user",
-          credits_balance: 10,
-          terms_accepted: true,
-          app_id: "pipulse-demo",
-        };
-        
-        setPiAccessToken("demo-token");
-        setApiAuthToken("demo-token");
-        setUserData(mockUser);
-        setAppId(mockUser.app_id);
+        if (piSdkAvailable) {
+          // Pi SDK is available - we're in Pi Browser
+          console.log("🔄 Authenticating with Pi Network SDK...");
+          setAuthMessage("Authenticating with Pi Network...");
+          await authenticateViaPiSdk();
+        } else {
+          // Pi SDK not available - not in Pi Browser
+          console.log("⚠️ Pi SDK not available - using demo mode");
+          setAuthMessage("Entering demo mode (Pi Browser not detected)...");
+          
+          // Create a mock user for testing
+          const mockUser: LoginDTO = {
+            id: "demo-user",
+            username: "demo_user",
+            credits_balance: 10,
+            terms_accepted: true,
+            app_id: "pipulse-demo",
+          };
+          
+          setPiAccessToken("demo-token");
+          setApiAuthToken("demo-token");
+          setUserData(mockUser);
+          setAppId(mockUser.app_id);
+        }
       }
 
       // Clear timeout since auth completed successfully

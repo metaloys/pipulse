@@ -16,17 +16,36 @@ export function PiBrowserDetector() {
         return;
       }
 
-      // Give Pi SDK a moment to load
-      setTimeout(() => {
+      // Check if already available
+      if ((window as any).Pi) {
+        console.log("✅ Pi SDK detected immediately");
+        setIsLoading(false);
+        return;
+      }
+
+      // Give Pi SDK more time to load (up to 3 seconds)
+      // Check every 100ms instead of just once
+      let attempts = 0;
+      const maxAttempts = 30; // 30 * 100ms = 3 seconds
+
+      const timer = setInterval(() => {
+        attempts++;
         const hasPiSDK = Boolean((window as any).Pi);
         
-        // If no Pi SDK, this is not a Pi Browser
-        if (!hasPiSDK) {
-          setIsNotPiBrowser(true);
+        if (hasPiSDK) {
+          console.log(`✅ Pi SDK detected after ${attempts * 100}ms`);
+          clearInterval(timer);
+          setIsLoading(false);
+          return;
         }
-        
-        setIsLoading(false);
-      }, 500);
+
+        if (attempts >= maxAttempts) {
+          console.log("⚠️ Pi SDK not detected after 3 seconds - not in Pi Browser");
+          clearInterval(timer);
+          setIsNotPiBrowser(true);
+          setIsLoading(false);
+        }
+      }, 100);
     };
 
     checkPiBrowser();
