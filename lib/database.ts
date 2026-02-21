@@ -379,3 +379,108 @@ export async function getUserStats(userId: string) {
     availableTasksCount: submissions.filter(s => s.submission_status === 'pending').length,
   };
 }
+
+// ============ PAYMENT MANAGEMENT ============
+
+/**
+ * Get total Pi commissions collected today
+ */
+export async function getTodayCommissions() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('pipulse_fee')
+    .eq('transaction_type', 'fee')
+    .eq('transaction_status', 'completed')
+    .gte('timestamp', today.toISOString());
+
+  if (error) {
+    console.error('Error fetching today commissions:', error);
+    return 0;
+  }
+
+  return data.reduce((sum, t) => sum + (t.pipulse_fee || 0), 0);
+}
+
+/**
+ * Get total Pi commissions collected this month
+ */
+export async function getMonthCommissions() {
+  const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('pipulse_fee')
+    .eq('transaction_type', 'fee')
+    .eq('transaction_status', 'completed')
+    .gte('timestamp', monthStart.toISOString());
+
+  if (error) {
+    console.error('Error fetching month commissions:', error);
+    return 0;
+  }
+
+  return data.reduce((sum, t) => sum + (t.pipulse_fee || 0), 0);
+}
+
+/**
+ * Get all transactions for a specific date range
+ */
+export async function getTransactionsByDateRange(startDate: Date, endDate: Date) {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .gte('timestamp', startDate.toISOString())
+    .lte('timestamp', endDate.toISOString())
+    .order('timestamp', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching transactions:', error);
+    return [];
+  }
+
+  return data as DatabaseTransaction[];
+}
+
+/**
+ * Get all pending transactions (not yet completed)
+ */
+export async function getPendingTransactions() {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('transaction_status', 'pending')
+    .order('timestamp', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching pending transactions:', error);
+    return [];
+  }
+
+  return data as DatabaseTransaction[];
+}
+
+/**
+ * Update transaction status (e.g., pending → completed)
+ */
+export async function updateTransactionStatus(transactionId: string, status: 'completed' | 'failed' | 'pending') {
+  const { data, error } = await supabase
+    .from('transactions')
+    .update({ 
+      transaction_status: status,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', transactionId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating transaction status:', error);
+    return null;
+  }
+
+  return data as DatabaseTransaction;
+}

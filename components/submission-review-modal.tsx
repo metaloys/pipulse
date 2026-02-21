@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import type { DatabaseTaskSubmission, DatabaseTask } from '@/lib/types';
 import { Clock, User, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { releasePaymentToWorker, calculateWorkerPayment } from '@/lib/pi-payment-escrow';
+import { getUserById } from '@/lib/database';
 
 interface SubmissionReviewModalProps {
   isOpen: boolean;
@@ -36,10 +38,33 @@ export function SubmissionReviewModal({
   const [showRejectForm, setShowRejectForm] = useState(false);
 
   const handleApprove = async () => {
-    if (!submission) return;
+    if (!submission || !task) return;
     try {
       setIsApproving(true);
       setError(null);
+
+      // Get worker details for payment
+      const worker = await getUserById(submission.worker_id);
+      if (!worker) {
+        throw new Error('Worker not found');
+      }
+
+      // Trigger Pi payment from PiPulse owner to worker
+      try {
+        console.log('💰 Initiating payment to worker...');
+        await releasePaymentToWorker(
+          task.id,
+          submission.worker_id,
+          worker.pi_username,
+          task.pi_reward
+        );
+        console.log('✅ Payment to worker completed');
+      } catch (paymentError) {
+        console.error('⚠️ Payment initiation warning (may retry):', paymentError);
+        // Continue with approval even if payment UI shows - backend may retry
+      }
+
+      // Approve the submission in database
       await onApprove(submission.id);
       onClose();
     } catch (err) {
@@ -165,6 +190,31 @@ export function SubmissionReviewModal({
             <div className="flex gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/50">
               <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
               <p className="text-sm text-red-400">{error}</p>
+            </div>
+          )}
+
+          {/* Payment Breakdown (before approval) */}
+          {submission.submission_status === 'pending' && (
+            <div className="glassmorphism p-4 rounded-lg bg-green-500/5 border border-green-500/20 space-y-3">
+              <h4 className="font-semibold text-green-400">Payment Details</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Task Reward:</span>
+                  <span className="font-semibold">{task.pi_reward} π</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">PiPulse Fee (15%):</span>
+                  <span className="font-semibold text-orange-400">{(task.pi_reward * 0.15).toFixed(2)} π</span>
+                </div>
+                <div className="h-px bg-white/10 my-2" />
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-semibold">Worker Receives:</span>
+                  <span className="font-bold text-green-400">{(task.pi_reward * 0.85).toFixed(2)} π</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Approving will trigger a Pi Network payment from PiPulse owner wallet to worker wallet.
+              </p>
             </div>
           )}
 
