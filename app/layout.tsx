@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { AppWrapper } from "@/components/app-wrapper";
+import { PiBrowserDetector } from "@/components/pi-browser-detector";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ html {
         `}</style>
       </head>
       <body>
+        <PiBrowserDetector />
         <AppWrapper>{children}</AppWrapper>
       </body>
     </html>
