@@ -1,11 +1,11 @@
 export const PI_NETWORK_CONFIG = {
   SDK_URL: "https://sdk.minepi.com/pi-sdk.js",
-  SANDBOX: false,
+  SANDBOX: true, // Enabled for sandbox testing with real Pi test users
 } as const;
 
 export const BACKEND_CONFIG = {
-  BASE_URL: "https://api.minepi.com",
-  BLOCKCHAIN_BASE_URL: "https://api.mainnet.minepi.com",
+  BASE_URL: "https://api.testnet.minepi.com", // Testnet API for sandbox testing
+  BLOCKCHAIN_BASE_URL: "https://api.testnet.minepi.com", // Testnet blockchain
 } as const;
 
 export const BACKEND_URLS = {
