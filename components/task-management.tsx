@@ -10,12 +10,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { updateTask, deleteTask } from '@/lib/database';
+import { CreateTaskModal } from '@/components/create-task-modal';
 import type { DatabaseTask, TaskCategory } from '@/lib/types';
-import { Edit2, Trash2, Eye, AlertCircle, Clock } from 'lucide-react';
+import { Edit2, Trash2, Eye, AlertCircle, Plus, Clock } from 'lucide-react';
 
 interface TaskManagementProps {
   tasks: DatabaseTask[];
   onTasksUpdated: () => void;
+  employerId?: string;
+  employerUsername?: string;
+  onCreateTask?: () => void;
 }
 
 const CATEGORIES: TaskCategory[] = [
@@ -226,6 +230,20 @@ export function TaskManagement({
 
   return (
     <>
+      {/* Create Task Modal Trigger (renders its own button) */}
+      {employerId && (
+        <div className="mb-6">
+          <CreateTaskModal
+            employerId={employerId}
+            employerUsername={employerUsername || 'employer'}
+            onTaskCreated={() => {
+              // Refresh the list after creation
+              onTasksUpdated();
+            }}
+          />
+        </div>
+      )}
+
       {/* Tasks List */}
       <div className="space-y-3">
         {tasks.length === 0 ? (
