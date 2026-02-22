@@ -55,11 +55,18 @@ export async function createUser(user: Omit<DatabaseUser, 'id' | 'created_at' | 
  */
 export async function createOrUpdateUserOnAuth(userId: string, username: string) {
   try {
-    // First check if user exists
-    const existingUser = await getUserById(userId);
+    // First check if user exists by ID
+    let existingUser = await getUserById(userId);
     
     if (existingUser) {
       console.log("✅ User already exists in database:", username);
+      return existingUser;
+    }
+
+    // Also check by username in case ID changed (shouldn't happen, but be safe)
+    existingUser = await getUserByUsername(username);
+    if (existingUser) {
+      console.log("✅ User found by username:", username, "- Using existing ID:", existingUser.id);
       return existingUser;
     }
 
@@ -83,6 +90,15 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
       .maybeSingle();
 
     if (error) {
+      // If it's a 409 (duplicate), try to fetch the existing user by username
+      if (error.code === 'PGRST109' || error.status === 409) {
+        console.warn("⚠️ User likely already exists (409). Fetching by username:", username);
+        const byUsername = await getUserByUsername(username);
+        if (byUsername) {
+          console.log("✅ Found existing user by username:", username);
+          return byUsername;
+        }
+      }
       console.error("❌ Failed to create user:", username, error);
       return null;
     }
