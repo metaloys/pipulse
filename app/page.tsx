@@ -58,9 +58,6 @@ export default function HomePage() {
           const realStats = await getUserStats(userData.id);
           if (realStats) {
             setUserStats(realStats);
-          } else {
-            console.warn('Failed to load user stats, using fallback mock data');
-            // Keep using mockUserStats (already set as initial state)
           }
         }
 

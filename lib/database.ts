@@ -8,7 +8,7 @@ export async function getUserByUsername(username: string) {
     .from('users')
     .select('*')
     .eq('pi_username', username)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error fetching user:', error);
@@ -22,7 +22,7 @@ export async function getUserById(userId: string) {
     .from('users')
     .select('*')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error fetching user:', error);
@@ -36,7 +36,7 @@ export async function createUser(user: Omit<DatabaseUser, 'id' | 'created_at' | 
     .from('users')
     .insert([user])
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error creating user:', error);
@@ -80,7 +80,7 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
         total_tasks_completed: 0,
       }])
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("❌ Failed to create user:", username, error);
@@ -105,7 +105,7 @@ export async function updateUser(userId: string, updates: Partial<DatabaseUser>)
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', userId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error updating user:', error);
@@ -150,7 +150,7 @@ export async function getTaskById(taskId: string) {
     .from('tasks')
     .select('*')
     .eq('id', taskId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error fetching task:', error);
@@ -164,7 +164,7 @@ export async function createTask(task: Omit<DatabaseTask, 'id' | 'created_at' | 
     .from('tasks')
     .insert([task])
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error creating task:', error);
@@ -179,7 +179,7 @@ export async function updateTask(taskId: string, updates: Partial<DatabaseTask>)
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', taskId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error updating task:', error);
@@ -209,7 +209,7 @@ export async function submitTask(submission: Omit<DatabaseTaskSubmission, 'id' |
     .from('task_submissions')
     .insert([submission])
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error submitting task:', error);
@@ -256,7 +256,7 @@ export async function approveSubmission(submissionId: string) {
     })
     .eq('id', submissionId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error approving submission:', error);
@@ -276,7 +276,7 @@ export async function rejectSubmission(submissionId: string, reason: string) {
     })
     .eq('id', submissionId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error rejecting submission:', error);
@@ -292,7 +292,7 @@ export async function createTransaction(transaction: Omit<DatabaseTransaction, '
     .from('transactions')
     .insert([transaction])
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error creating transaction:', error);
@@ -320,7 +320,7 @@ export async function getTransactionById(transactionId: string) {
     .from('transactions')
     .select('*')
     .eq('id', transactionId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error fetching transaction:', error);
@@ -336,7 +336,7 @@ export async function getUserStreak(userId: string) {
     .from('streaks')
     .select('*')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error fetching streak:', error);
@@ -356,7 +356,7 @@ export async function createStreak(userId: string) {
       streak_bonus_earned: false
     }])
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error creating streak:', error);
@@ -371,7 +371,7 @@ export async function updateStreak(userId: string, updates: Partial<DatabaseStre
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('user_id', userId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error updating streak:', error);
@@ -404,7 +404,16 @@ export async function getUserStats(userId: string) {
     const user = await getUserById(userId);
     if (!user) {
       console.warn('User not found in database:', userId);
-      return null;
+      // Return empty real stats instead of null
+      return {
+        dailyEarnings: 0,
+        weeklyEarnings: 0,
+        totalEarnings: 0,
+        tasksCompleted: 0,
+        currentStreak: 0,
+        level: 'Newcomer',
+        availableTasksCount: 0,
+      };
     }
 
     const transactions = await getUserTransactions(userId);
@@ -433,12 +442,21 @@ export async function getUserStats(userId: string) {
       totalEarnings: user.total_earnings || 0,
       tasksCompleted: user.total_tasks_completed || 0,
       currentStreak: user.current_streak || 0,
-      level: user.level || 1,
+      level: user.level || 'Newcomer',
       availableTasksCount: submissions.filter(s => s.submission_status === 'pending').length,
     };
   } catch (error) {
     console.error('Error getting user stats:', error);
-    return null;
+    // Return empty real stats instead of null
+    return {
+      dailyEarnings: 0,
+      weeklyEarnings: 0,
+      totalEarnings: 0,
+      tasksCompleted: 0,
+      currentStreak: 0,
+      level: 'Newcomer',
+      availableTasksCount: 0,
+    };
   }
 }
 
@@ -537,7 +555,7 @@ export async function updateTransactionStatus(transactionId: string, status: 'co
     })
     .eq('id', transactionId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error updating transaction status:', error);
@@ -557,7 +575,7 @@ export async function createDispute(dispute: Omit<DatabaseDispute, 'id' | 'creat
     .from('disputes')
     .insert([dispute])
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error creating dispute:', error);
@@ -641,7 +659,7 @@ export async function getDisputeById(disputeId: string) {
     .from('disputes')
     .select('*')
     .eq('id', disputeId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error fetching dispute:', error);
@@ -671,7 +689,7 @@ export async function resolveDispute(
     })
     .eq('id', disputeId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Error resolving dispute:', error);
@@ -689,7 +707,7 @@ export async function hasActiveDispute(submissionId: string) {
     .select('id')
     .eq('submission_id', submissionId)
     .eq('dispute_status', 'pending')
-    .single();
+    .maybeSingle();
 
   if (error && error.code !== 'PGRST116') {
     console.error('Error checking dispute:', error);
