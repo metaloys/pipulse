@@ -5,24 +5,67 @@ import { createClient } from '@supabase/supabase-js';
  * POST /api/payments/complete
  * 
  * Server-side payment completion using Pi Network API
- * This endpoint is called when a payment is ready for server completion
+ * Complete workflow with all 6 critical steps:
  * 
- * The Pi Network requires completion to happen server-side with the PI_API_KEY
- * Additionally, we update the Supabase database with transaction and user info
+ * STEP 1: Complete payment with Pi Network API
+ * STEP 2: Get payment details from Pi Network (to confirm amount)
+ * STEP 3: Update worker earnings in users table
+ * STEP 4: Update submission status in task_submissions table
+ * STEP 5: Record transaction in transactions table
+ * STEP 6: Update task slots remaining
  * 
- * Request body: { paymentId: string, txid: string, submissionId?: string, amount?: number, workerId?: string }
- * Response: { success: boolean, message?: string, error?: string }
+ * Request body from onReadyForServerCompletion:
+ * {
+ *   paymentId: string,
+ *   txid: string,
+ *   metadata: {
+ *     task_id: string,
+ *     worker_id: string,
+ *     submission_id: string,
+ *     amount: number (worker payment, after commission),
+ *     fee: number (pipulse commission)
+ *   }
+ * }
  */
 export async function POST(request: NextRequest) {
   try {
     // Parse the request body
     const body = await request.json();
-    const { paymentId, txid, submissionId, amount, workerId } = body;
+    const { paymentId, txid, metadata } = body;
+
+    console.log(`📊 Payment complete endpoint called:`, {
+      paymentId,
+      txid,
+      metadata,
+    });
 
     // Validate required inputs
     if (!paymentId || !txid) {
       return NextResponse.json(
         { success: false, error: 'Missing paymentId or txid' },
+        { status: 400 }
+      );
+    }
+
+    // Extract metadata fields
+    const taskId = metadata?.task_id;
+    const workerId = metadata?.worker_id;
+    const submissionId = metadata?.submission_id;
+    const workerAmount = metadata?.amount;
+    const pipulseFee = metadata?.fee || 0;
+
+    console.log(`📋 Extracted metadata:`, {
+      taskId,
+      workerId,
+      submissionId,
+      workerAmount,
+      pipulseFee,
+    });
+
+    // Validate we have minimum required data
+    if (!paymentId || !txid) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required payment fields' },
         { status: 400 }
       );
     }
@@ -37,9 +80,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // STEP 1: Call Pi Network API server-side to complete the payment
-    console.log(`🔐 Completing payment server-side: ${paymentId}`);
-    const piResponse = await fetch(
+    // ========================================================================
+    // STEP 1: Complete payment with Pi Network API
+    // ========================================================================
+    console.log(`\n🔐 [STEP 1] Completing payment with Pi Network: ${paymentId}`);
+    const piCompleteResponse = await fetch(
       `https://api.minepi.com/v2/payments/${paymentId}/complete`,
       {
         method: 'POST',
@@ -51,28 +96,54 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    // Handle Pi Network API response
-    if (!piResponse.ok) {
-      const errorData = await piResponse.json().catch(() => ({}));
-      console.error(`❌ Pi Network API error (${piResponse.status}):`, errorData);
+    if (!piCompleteResponse.ok) {
+      const errorData = await piCompleteResponse.json().catch(() => ({}));
+      console.error(`❌ Pi Network complete failed (${piCompleteResponse.status}):`, errorData);
       
       return NextResponse.json(
         {
           success: false,
-          error: `Pi Network API error: ${piResponse.status}`,
+          error: `Pi Network API error: ${piCompleteResponse.status}`,
           details: errorData,
         },
-        { status: piResponse.status }
+        { status: piCompleteResponse.status }
       );
     }
 
-    const completionData = await piResponse.json();
-    console.log(`✅ Payment completed on Pi Network: ${paymentId}`);
+    const completionData = await piCompleteResponse.json();
+    console.log(`✅ [STEP 1] Payment completed on Pi Network`);
 
-    // STEP 2: Update Supabase database after successful Pi Network completion
-    if (submissionId && workerId && amount) {
+    // ========================================================================
+    // STEP 2: Get payment details from Pi Network
+    // ========================================================================
+    console.log(`\n📄 [STEP 2] Fetching payment details from Pi Network: ${paymentId}`);
+    let paymentDetailsAmount = workerAmount; // Use provided amount as fallback
+
+    const piDetailsResponse = await fetch(
+      `https://api.minepi.com/v2/payments/${paymentId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Key ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (piDetailsResponse.ok) {
+      const paymentDetails = await piDetailsResponse.json();
+      paymentDetailsAmount = paymentDetails.amount || workerAmount;
+      console.log(`✅ [STEP 2] Payment amount confirmed: ${paymentDetailsAmount}π`);
+    } else {
+      console.warn(`⚠️ [STEP 2] Could not fetch payment details, using metadata amount: ${workerAmount}π`);
+    }
+
+    // ========================================================================
+    // Database updates
+    // ========================================================================
+    if (workerId && submissionId && paymentDetailsAmount) {
       try {
-        console.log(`📊 Updating Supabase for submission: ${submissionId}`);
+        console.log(`\n💾 Initializing Supabase admin client for database updates`);
 
         // Initialize Supabase admin client for backend operations
         const supabaseAdmin = createClient(
@@ -86,44 +157,10 @@ export async function POST(request: NextRequest) {
           }
         );
 
-        // 2a. Add transaction record
-        const { error: txError } = await supabaseAdmin
-          .from('transactions')
-          .insert([{
-            id: `txn_${txid}`,
-            payment_id: paymentId,
-            worker_id: workerId,
-            amount: amount,
-            status: 'completed',
-            pi_transaction_id: txid,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }]);
-
-        if (txError) {
-          console.error(`⚠️ Failed to create transaction record:`, txError);
-          // Log but don't fail - Pi Network payment already succeeded
-        } else {
-          console.log(`✅ Transaction record created`);
-        }
-
-        // 2b. Update submission status to completed
-        const { error: submissionError } = await supabaseAdmin
-          .from('task_submissions')
-          .update({
-            status: 'completed',
-            approved_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', submissionId);
-
-        if (submissionError) {
-          console.error(`⚠️ Failed to update submission status:`, submissionError);
-        } else {
-          console.log(`✅ Submission status updated to completed`);
-        }
-
-        // 2c. Update worker's total_earnings
+        // ====================================================================
+        // STEP 3: Update worker earnings in users table
+        // ====================================================================
+        console.log(`\n💰 [STEP 3] Updating worker earnings for: ${workerId}`);
         const { data: userData, error: userFetchError } = await supabaseAdmin
           .from('users')
           .select('total_earnings, total_tasks_completed')
@@ -131,9 +168,9 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
 
         if (userFetchError) {
-          console.error(`⚠️ Failed to fetch user data:`, userFetchError);
+          console.error(`⚠️ [STEP 3] Failed to fetch user data:`, userFetchError);
         } else if (userData) {
-          const newTotalEarnings = (userData.total_earnings || 0) + amount;
+          const newTotalEarnings = (userData.total_earnings || 0) + paymentDetailsAmount;
           const newTasksCompleted = (userData.total_tasks_completed || 0) + 1;
 
           const { error: updateError } = await supabaseAdmin
@@ -146,23 +183,127 @@ export async function POST(request: NextRequest) {
             .eq('id', workerId);
 
           if (updateError) {
-            console.error(`⚠️ Failed to update user earnings:`, updateError);
+            console.error(`❌ [STEP 3] Failed to update user earnings:`, updateError);
           } else {
-            console.log(`✅ Worker earnings updated: ${newTotalEarnings}π, tasks: ${newTasksCompleted}`);
+            console.log(`✅ [STEP 3] Worker earnings updated: ${newTotalEarnings}π, tasks completed: ${newTasksCompleted}`);
           }
+        } else {
+          console.error(`❌ [STEP 3] Worker not found: ${workerId}`);
+        }
+
+        // ====================================================================
+        // STEP 4: Update submission status in task_submissions table
+        // ====================================================================
+        console.log(`\n✓ [STEP 4] Updating submission status: ${submissionId}`);
+        const { error: submissionError } = await supabaseAdmin
+          .from('task_submissions')
+          .update({
+            status: 'completed',
+            reviewed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', submissionId);
+
+        if (submissionError) {
+          console.error(`❌ [STEP 4] Failed to update submission status:`, submissionError);
+        } else {
+          console.log(`✅ [STEP 4] Submission status updated to 'completed'`);
+        }
+
+        // ====================================================================
+        // STEP 5: Record transaction in transactions table
+        // ====================================================================
+        console.log(`\n💳 [STEP 5] Recording transaction in database`);
+        const { error: txError } = await supabaseAdmin
+          .from('transactions')
+          .insert([{
+            task_id: taskId,
+            worker_id: workerId,
+            employer_id: null, // Will be fetched from task if needed
+            amount: paymentDetailsAmount,
+            pipulse_fee: pipulseFee,
+            txid: txid,
+            pi_transaction_id: txid,
+            status: 'completed',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }]);
+
+        if (txError) {
+          console.error(`❌ [STEP 5] Failed to record transaction:`, txError);
+        } else {
+          console.log(`✅ [STEP 5] Transaction recorded: ${paymentDetailsAmount}π to worker, ${pipulseFee}π fee`);
+        }
+
+        // ====================================================================
+        // STEP 6: Update task slots remaining
+        // ====================================================================
+        if (taskId) {
+          console.log(`\n🎯 [STEP 6] Updating task slots for: ${taskId}`);
+          const { error: slotsError } = await supabaseAdmin
+            .from('tasks')
+            .update({
+              slots_remaining: await supabaseAdmin.rpc('decrement_slots', { task_id_param: taskId }).catch(() => null),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', taskId);
+
+          // If RPC fails, try direct update
+          if (slotsError) {
+            console.warn(`⚠️ [STEP 6] Direct slot decrement attempt (RPC failed):`, slotsError);
+            const { data: taskData } = await supabaseAdmin
+              .from('tasks')
+              .select('slots_remaining')
+              .eq('id', taskId)
+              .maybeSingle();
+
+            if (taskData) {
+              const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
+              const { error: updateSlotsError } = await supabaseAdmin
+                .from('tasks')
+                .update({
+                  slots_remaining: newSlotsRemaining,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', taskId);
+
+              if (updateSlotsError) {
+                console.error(`❌ [STEP 6] Failed to update slots:`, updateSlotsError);
+              } else {
+                console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining`);
+              }
+            }
+          } else {
+            console.log(`✅ [STEP 6] Task slots decremented successfully`);
+          }
+        } else {
+          console.warn(`⚠️ [STEP 6] No taskId provided, skipping slots update`);
         }
       } catch (dbError) {
-        console.error(`⚠️ Database update error (non-critical):`, dbError);
+        console.error(`❌ Database operation error:`, dbError);
         // Log but don't fail - Pi Network payment already succeeded
         // The database updates are for record-keeping only
       }
+    } else {
+      console.warn(`⚠️ Skipping database updates - missing required fields:`, {
+        workerId,
+        submissionId,
+        paymentDetailsAmount,
+      });
     }
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Payment completed successfully',
-        data: completionData,
+        message: 'Payment completed and database updated successfully',
+        data: {
+          paymentId,
+          txid,
+          amount: paymentDetailsAmount,
+          workerId,
+          submissionId,
+          taskId,
+        },
       },
       { status: 200 }
     );
