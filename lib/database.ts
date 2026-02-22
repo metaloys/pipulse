@@ -346,38 +346,46 @@ export async function getLeaderboard(limit: number = 10) {
 // ============ STATS ============
 
 export async function getUserStats(userId: string) {
-  const user = await getUserById(userId);
-  if (!user) return null;
+  try {
+    const user = await getUserById(userId);
+    if (!user) {
+      console.warn('User not found in database:', userId);
+      return null;
+    }
 
-  const transactions = await getUserTransactions(userId);
-  const submissions = await getWorkerSubmissions(userId);
-  
-  const dailyEarnings = transactions
-    .filter(t => {
-      const date = new Date(t.timestamp);
-      const today = new Date();
-      return date.toDateString() === today.toDateString() && t.transaction_type === 'payment';
-    })
-    .reduce((sum, t) => sum + t.amount, 0);
+    const transactions = await getUserTransactions(userId);
+    const submissions = await getWorkerSubmissions(userId);
+    
+    const dailyEarnings = transactions
+      .filter(t => {
+        const date = new Date(t.timestamp);
+        const today = new Date();
+        return date.toDateString() === today.toDateString() && t.transaction_type === 'payment';
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
 
-  const weeklyEarnings = transactions
-    .filter(t => {
-      const date = new Date(t.timestamp);
-      const today = new Date();
-      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-      return date >= weekAgo && t.transaction_type === 'payment';
-    })
-    .reduce((sum, t) => sum + t.amount, 0);
+    const weeklyEarnings = transactions
+      .filter(t => {
+        const date = new Date(t.timestamp);
+        const today = new Date();
+        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return date >= weekAgo && t.transaction_type === 'payment';
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
 
-  return {
-    dailyEarnings,
-    weeklyEarnings,
-    totalEarnings: user.total_earnings,
-    tasksCompleted: user.total_tasks_completed,
-    currentStreak: user.current_streak,
-    level: user.level,
-    availableTasksCount: submissions.filter(s => s.submission_status === 'pending').length,
-  };
+    return {
+      dailyEarnings,
+      weeklyEarnings,
+      totalEarnings: user.total_earnings || 0,
+      tasksCompleted: user.total_tasks_completed || 0,
+      currentStreak: user.current_streak || 0,
+      level: user.level || 1,
+      availableTasksCount: submissions.filter(s => s.submission_status === 'pending').length,
+    };
+  } catch (error) {
+    console.error('Error getting user stats:', error);
+    return null;
+  }
 }
 
 // ============ PAYMENT MANAGEMENT ============

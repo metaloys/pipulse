@@ -56,7 +56,12 @@ export default function HomePage() {
         // Fetch real user stats if logged in
         if (userData?.id) {
           const realStats = await getUserStats(userData.id);
-          setUserStats(realStats);
+          if (realStats) {
+            setUserStats(realStats);
+          } else {
+            console.warn('Failed to load user stats, using fallback mock data');
+            // Keep using mockUserStats (already set as initial state)
+          }
         }
 
         // If user is an employer, load their tasks
