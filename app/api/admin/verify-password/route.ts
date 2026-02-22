@@ -11,7 +11,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const adminPassword = process.env.ADMIN_PASSWORD;
+    // Get admin password from environment variable, with fallback for development
+    const adminPassword = process.env.ADMIN_PASSWORD || 'pipulse_admin_default';
 
     if (!adminPassword) {
       console.error('ADMIN_PASSWORD environment variable is not set');
