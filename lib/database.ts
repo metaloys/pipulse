@@ -1550,3 +1550,123 @@ export async function getUserLeaderboardPosition(
 
   return null;
 }
+
+// ============ USER STATS UPDATES ============
+
+/**
+ * Update user's total earnings and task count when submission is approved
+ * This is CRITICAL for leaderboard to work - must be called when payment is processed
+ */
+export async function updateUserEarnings(userId: string, amountEarned: number) {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('total_earnings')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error('Error fetching user for earnings update:', error);
+      return null;
+    }
+
+    const newEarnings = (data.total_earnings || 0) + amountEarned;
+
+    const { data: updated, error: updateError } = await supabase
+      .from('users')
+      .update({ total_earnings: newEarnings })
+      .eq('id', userId)
+      .select()
+      .maybeSingle();
+
+    if (updateError) {
+      console.error('Error updating user earnings:', updateError);
+      return null;
+    }
+
+    return updated;
+  } catch (error) {
+    console.error('Error in updateUserEarnings:', error);
+    return null;
+  }
+}
+
+/**
+ * Increment user's total_tasks_completed when submission is approved
+ * This is CRITICAL for leaderboard to work - must be called when submission approved
+ */
+export async function incrementUserTaskCount(userId: string, count: number = 1) {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('total_tasks_completed')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error('Error fetching user for task count update:', error);
+      return null;
+    }
+
+    const newCount = (data.total_tasks_completed || 0) + count;
+
+    const { data: updated, error: updateError } = await supabase
+      .from('users')
+      .update({ total_tasks_completed: newCount })
+      .eq('id', userId)
+      .select()
+      .maybeSingle();
+
+    if (updateError) {
+      console.error('Error updating user task count:', updateError);
+      return null;
+    }
+
+    return updated;
+  } catch (error) {
+    console.error('Error in incrementUserTaskCount:', error);
+    return null;
+  }
+}
+
+/**
+ * Batch update user earnings and task count (call both at once)
+ * Used when submission is approved and payment is made
+ */
+export async function updateUserStatsAfterApproval(userId: string, piAmount: number) {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('total_earnings, total_tasks_completed')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error('Error fetching user for stats update:', error);
+      return null;
+    }
+
+    const updated = {
+      total_earnings: (data.total_earnings || 0) + piAmount,
+      total_tasks_completed: (data.total_tasks_completed || 0) + 1,
+    };
+
+    const { data: result, error: updateError } = await supabase
+      .from('users')
+      .update(updated)
+      .eq('id', userId)
+      .select()
+      .maybeSingle();
+
+    if (updateError) {
+      console.error('Error updating user stats:', updateError);
+      return null;
+    }
+
+    console.log(`✅ Updated user stats: +${piAmount}π earned, +1 task completed`);
+    return result;
+  } catch (error) {
+    console.error('Error in updateUserStatsAfterApproval:', error);
+    return null;
+  }
+}
