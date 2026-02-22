@@ -9,7 +9,7 @@ import { TaskSubmissionModal } from '@/components/task-submission-modal';
 import { EmployerDashboard } from '@/components/employer-dashboard';
 import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
-import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer } from '@/lib/database';
+import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats } from '@/lib/database';
 import { mockUserStats } from '@/lib/mock-data';
 import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry } from '@/lib/types';
 import { 
@@ -29,6 +29,7 @@ export default function HomePage() {
   const [tasks, setTasks] = useState<DatabaseTask[]>([]);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [employerTasks, setEmployerTasks] = useState<DatabaseTask[]>([]);
+  const [userStats, setUserStats] = useState(mockUserStats);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<DatabaseTask | null>(null);
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
@@ -51,6 +52,12 @@ export default function HomePage() {
           tasksCompleted: entry.total_tasks_completed,
         }));
         setLeaderboardEntries(formattedLeaderboard);
+
+        // Fetch real user stats if logged in
+        if (userData?.id) {
+          const realStats = await getUserStats(userData.id);
+          setUserStats(realStats);
+        }
 
         // If user is an employer, load their tasks
         if (userData?.id && userData.app_id) {
@@ -127,7 +134,7 @@ export default function HomePage() {
       <AppHeader 
         userRole={userRole} 
         onRoleSwitch={handleRoleSwitch}
-        currentStreak={mockUserStats.currentStreak}
+        currentStreak={userStats.currentStreak}
       />
 
       <main className="max-w-7xl mx-auto px-4 py-6 pb-20">
@@ -141,7 +148,7 @@ export default function HomePage() {
                     Welcome back, Pioneer
                   </h1>
                   <p className="text-sm text-muted-foreground">
-                    Level: {mockUserStats.level}
+                    Level: {userStats.level}
                   </p>
                 </div>
               </div>
@@ -149,23 +156,23 @@ export default function HomePage() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatsCard
                   label="Today's Earnings"
-                  value={`${mockUserStats.dailyEarnings} π`}
+                  value={`${userStats.dailyEarnings} π`}
                   icon={<Coins className="w-8 h-8" />}
                   trend="+2.5 π from yesterday"
                 />
                 <StatsCard
                   label="Tasks Completed"
-                  value={mockUserStats.tasksCompleted}
+                  value={userStats.tasksCompleted}
                   icon={<CheckCircle className="w-8 h-8" />}
                 />
                 <StatsCard
                   label="Available Tasks"
-                  value={mockUserStats.availableTasksCount}
+                  value={tasks.length}
                   icon={<Target className="w-8 h-8" />}
                 />
                 <StatsCard
                   label="Weekly Earnings"
-                  value={`${mockUserStats.weeklyEarnings} π`}
+                  value={`${userStats.weeklyEarnings} π`}
                   icon={<TrendingUp className="w-8 h-8" />}
                   trend="+18% from last week"
                 />
@@ -215,7 +222,7 @@ export default function HomePage() {
                     <div>
                       <div className="flex justify-between text-sm mb-2">
                         <span className="text-muted-foreground">Total Earnings</span>
-                        <span className="font-bold text-primary">{mockUserStats.totalEarnings} π</span>
+                        <span className="font-bold text-primary">{userStats.totalEarnings} π</span>
                       </div>
                       <div className="w-full bg-muted rounded-full h-2">
                         <div className="bg-primary h-2 rounded-full" style={{ width: '68%' }} />
@@ -229,7 +236,7 @@ export default function HomePage() {
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-muted-foreground">Current Streak</span>
                         <span className="text-2xl font-bold text-orange-400">
-                          {mockUserStats.currentStreak} 🔥
+                          {userStats.currentStreak} 🔥
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground">
