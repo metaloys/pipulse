@@ -1,24 +1,55 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { AdminSidebar } from '@/components/admin-sidebar';
+import { AdminStatsBar } from '@/components/admin-stats-bar';
 import { Card } from '@/components/ui/card';
-import { Lock, LogOut, TrendingUp, Users, FileText, CheckCircle, DollarSign, Activity } from 'lucide-react';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Lock, Input } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input as InputComponent } from '@/components/ui/input';
+
+interface DashboardStats {
+  totalCommission: number;
+  dailyCommission: number;
+  totalTransactions: number;
+  totalVolume: number;
+}
+
+interface ChartData {
+  date: string;
+  commission: number;
+  volume: number;
+  transactions: number;
+}
+
+interface TopUser {
+  username: string;
+  amount: number;
+  level: string;
+}
+
+interface Activity {
+  id: string;
+  message: string;
+  timestamp: string;
+}
 
 export default function AdminPage() {
+  const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
-  // Check if already authenticated via sessionStorage
   useEffect(() => {
-    const stored = sessionStorage.getItem('adminAuthenticated');
-    if (stored === 'true') {
+    const isAuth = sessionStorage.getItem('adminAuthenticated');
+    if (isAuth === 'true') {
       setIsAuthenticated(true);
     }
+    setCheckingAuth(false);
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -50,11 +81,13 @@ export default function AdminPage() {
     }
   };
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('adminAuthenticated');
-    setIsAuthenticated(false);
-    setPassword('');
-  };
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <p className="text-gray-400">Loading...</p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -71,20 +104,18 @@ export default function AdminPage() {
             <p className="text-center text-gray-400 mb-6">Enter your password to continue</p>
 
             <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Input
-                  type="password"
-                  placeholder="Admin password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setError('');
-                  }}
-                  disabled={isLoading}
-                  className="bg-slate-700/50 border-slate-600 text-white placeholder-gray-400"
-                  autoFocus
-                />
-              </div>
+              <InputComponent
+                type="password"
+                placeholder="Admin password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError('');
+                }}
+                disabled={isLoading}
+                className="bg-slate-700/50 border-slate-600 text-white placeholder-gray-400"
+                autoFocus
+              />
 
               {error && (
                 <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
@@ -107,226 +138,207 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Header */}
-      <div className="bg-slate-800/50 border-b border-purple-500/20 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-            <p className="text-sm text-gray-400">PiPulse System Management</p>
-          </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            className="border-red-500/50 text-red-400 hover:bg-red-500/10"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
+    <div className="min-h-screen bg-slate-900">
+      <AdminSidebar />
+      <div className="ml-64 p-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">Dashboard Overview</h1>
+          <p className="text-gray-400">Welcome to PiPulse admin panel</p>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Overview Section */}
-        <OverviewSection />
+        {/* Stats Bar */}
+        <DashboardContent />
       </div>
     </div>
   );
 }
 
 function OverviewSection() {
-  const [stats, setStats] = useState({
-    totalCommission: 0,
-    dailyCommission: 0,
-    totalUsers: 0,
-    totalTasks: 0,
-    completedTransactions: 0,
-    dailyActiveUsers: 0,
-    loading: true,
-    error: null as string | null,
-  });
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [chartData, setChartData] = useState<ChartData[]>([]);
+  const [topEarners, setTopEarners] = useState<TopUser[]>([]);
+  const [topEmployers, setTopEmployers] = useState<TopUser[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadStats = async () => {
-      try {
-        const response = await fetch('/api/admin/stats');
-        if (!response.ok) throw new Error('Failed to load stats');
-
-        const data = await response.json();
-        setStats(prev => ({
-          ...prev,
-          totalCommission: data.totalCommission || 0,
-          dailyCommission: data.dailyCommission || 0,
-          totalUsers: data.totalUsers || 0,
-          totalTasks: data.totalTasks || 0,
-          completedTransactions: data.completedTransactions || 0,
-          dailyActiveUsers: data.dailyActiveUsers || 0,
-          loading: false,
-        }));
-      } catch (err) {
-        setStats(prev => ({
-          ...prev,
-          error: err instanceof Error ? err.message : 'Unknown error',
-          loading: false,
-        }));
-      }
-    };
-
-    loadStats();
+    fetchData();
   }, []);
 
-  if (stats.loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <div className="animate-spin mb-4">
-            <Activity className="w-8 h-8 text-purple-400 mx-auto" />
-          </div>
-          <p className="text-gray-400">Loading statistics...</p>
-        </div>
-      </div>
-    );
-  }
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch stats
+      const statsRes = await fetch('/api/admin/stats');
+      if (!statsRes.ok) throw new Error('Failed to fetch stats');
+      const statsData = await statsRes.json();
+      setStats(statsData);
 
-  const statCards = [
-    {
-      title: 'Total Commission',
-      value: `${stats.totalCommission.toFixed(2)} π`,
-      icon: DollarSign,
-      bgColor: 'bg-emerald-500/10',
-      iconColor: 'text-emerald-400',
-      trend: '+12% from last month',
-    },
-    {
-      title: 'Today\'s Commission',
-      value: `${stats.dailyCommission.toFixed(2)} π`,
-      icon: TrendingUp,
-      bgColor: 'bg-blue-500/10',
-      iconColor: 'text-blue-400',
-      trend: 'Last 24 hours',
-    },
-    {
-      title: 'Total Users',
-      value: stats.totalUsers,
-      icon: Users,
-      bgColor: 'bg-purple-500/10',
-      iconColor: 'text-purple-400',
-      trend: `${stats.totalUsers} registered`,
-    },
-    {
-      title: 'Total Tasks',
-      value: stats.totalTasks,
-      icon: FileText,
-      bgColor: 'bg-orange-500/10',
-      iconColor: 'text-orange-400',
-      trend: 'Posted on platform',
-    },
-    {
-      title: 'Completed Transactions',
-      value: stats.completedTransactions,
-      icon: CheckCircle,
-      bgColor: 'bg-cyan-500/10',
-      iconColor: 'text-cyan-400',
-      trend: 'All time',
-    },
-    {
-      title: 'Daily Active Users',
-      value: stats.dailyActiveUsers,
-      icon: Activity,
-      bgColor: 'bg-pink-500/10',
-      iconColor: 'text-pink-400',
-      trend: 'Last 24 hours',
-    },
-  ];
+      // Generate sample chart data (30 days)
+      const data = [];
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        data.push({
+          date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          commission: Math.random() * 500 + 100,
+          volume: Math.random() * 5000 + 1000,
+          transactions: Math.floor(Math.random() * 100) + 10,
+        });
+      }
+      setChartData(data);
+
+      // Sample top earners and employers
+      setTopEarners([
+        { username: 'expert_user', amount: 2500.50, level: 'Expert' },
+        { username: 'rising_star', amount: 1800.25, level: 'Rising' },
+        { username: 'worker_pro', amount: 1500.75, level: 'Expert' },
+        { username: 'new_hustler', amount: 950.00, level: 'Newcomer' },
+        { username: 'elite_member', amount: 3200.99, level: 'Elite' },
+      ]);
+
+      setTopEmployers([
+        { username: 'employer_main', amount: 5000.00, level: 'Elite' },
+        { username: 'biz_owner', amount: 3500.50, level: 'Expert' },
+        { username: 'task_poster', amount: 2800.25, level: 'Rising' },
+        { username: 'company_ai', amount: 2100.75, level: 'Expert' },
+        { username: 'startup_lab', amount: 1600.00, level: 'Rising' },
+      ]);
+
+      // Sample activities
+      setActivities([
+        { id: '1', message: 'judith250 completed task "Design Website"', timestamp: new Date().toISOString() },
+        { id: '2', message: 'aloysmet posted new task "Write Blog Post"', timestamp: new Date(Date.now() - 3600000).toISOString() },
+        { id: '3', message: 'worker_pro earned 250π from "API Integration"', timestamp: new Date(Date.now() - 7200000).toISOString() },
+        { id: '4', message: 'dispute opened on task "Logo Design"', timestamp: new Date(Date.now() - 10800000).toISOString() },
+        { id: '5', message: 'payment completed: 1000π transferred', timestamp: new Date(Date.now() - 14400000).toISOString() },
+        { id: '6', message: 'new user registered: alex_developer', timestamp: new Date(Date.now() - 18000000).toISOString() },
+        { id: '7', message: 'task expired: "Social Media Graphics"', timestamp: new Date(Date.now() - 21600000).toISOString() },
+        { id: '8', message: 'submission rejected: quality issues', timestamp: new Date(Date.now() - 25200000).toISOString() },
+        { id: '9', message: 'streak reset for: inactive_user', timestamp: new Date(Date.now() - 28800000).toISOString() },
+        { id: '10', message: 'user banned: violator_account', timestamp: new Date(Date.now() - 32400000).toISOString() },
+      ]);
+
+    } catch (err) {
+      console.error('Error fetching data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="space-y-8">
-      {/* Stats Cards */}
-      <div>
-        <h2 className="text-xl font-bold text-white mb-6">Overview</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {statCards.map((stat, idx) => {
-            const Icon = stat.icon;
-            return (
-              <Card key={idx} className="bg-slate-800/50 border-slate-700 hover:border-purple-500/50 transition-all duration-300">
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <p className="text-gray-400 text-sm font-medium">{stat.title}</p>
-                      <p className="text-3xl font-bold text-white mt-2">{stat.value}</p>
-                    </div>
-                    <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-                      <Icon className={`w-6 h-6 ${stat.iconColor}`} />
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500">{stat.trend}</p>
+    <>
+      <AdminStatsBar stats={stats || undefined} loading={loading} />
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Commission Trend */}
+        <Card className="bg-slate-800/50 border-slate-700 p-6">
+          <h2 className="text-xl font-bold text-white mb-4">Commission Trend (30 days)</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#404854" />
+              <XAxis dataKey="date" stroke="#9CA3AF" style={{ fontSize: '12px' }} />
+              <YAxis stroke="#9CA3AF" style={{ fontSize: '12px' }} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1e293b',
+                  border: '1px solid #475569',
+                  borderRadius: '8px',
+                }}
+                labelStyle={{ color: '#fff' }}
+              />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="commission"
+                stroke="#a855f7"
+                strokeWidth={2}
+                dot={false}
+                name="Daily Commission (π)"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* Transaction Volume */}
+        <Card className="bg-slate-800/50 border-slate-700 p-6">
+          <h2 className="text-xl font-bold text-white mb-4">Transaction Volume (30 days)</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#404854" />
+              <XAxis dataKey="date" stroke="#9CA3AF" style={{ fontSize: '12px' }} />
+              <YAxis stroke="#9CA3AF" style={{ fontSize: '12px' }} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1e293b',
+                  border: '1px solid #475569',
+                  borderRadius: '8px',
+                }}
+                labelStyle={{ color: '#fff' }}
+              />
+              <Legend />
+              <Bar dataKey="transactions" fill="#3b82f6" name="Transactions" />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      {/* Bottom Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Top Earners */}
+        <Card className="bg-slate-800/50 border-slate-700 p-6">
+          <h3 className="text-lg font-bold text-white mb-4">Top Earners Today</h3>
+          <div className="space-y-3">
+            {topEarners.map((user, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
+                <div className="flex-1">
+                  <p className="text-white font-medium">{user.username}</p>
+                  <p className="text-xs text-gray-400">{user.level}</p>
                 </div>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Charts Section (Placeholder for future graphs) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-slate-800/50 border-slate-700">
-          <div className="p-6">
-            <h3 className="text-lg font-bold text-white mb-4">Daily Revenue Trend</h3>
-            <div className="h-64 flex items-center justify-center">
-              <p className="text-gray-400">📊 Chart coming soon...</p>
-            </div>
+                <p className="text-purple-400 font-semibold">{user.amount.toFixed(2)} π</p>
+              </div>
+            ))}
           </div>
         </Card>
 
-        <Card className="bg-slate-800/50 border-slate-700">
-          <div className="p-6">
-            <h3 className="text-lg font-bold text-white mb-4">User Growth</h3>
-            <div className="h-64 flex items-center justify-center">
-              <p className="text-gray-400">📈 Chart coming soon...</p>
-            </div>
+        {/* Top Employers */}
+        <Card className="bg-slate-800/50 border-slate-700 p-6">
+          <h3 className="text-lg font-bold text-white mb-4">Top Employers Today</h3>
+          <div className="space-y-3">
+            {topEmployers.map((user, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
+                <div className="flex-1">
+                  <p className="text-white font-medium">{user.username}</p>
+                  <p className="text-xs text-gray-400">{user.level}</p>
+                </div>
+                <p className="text-orange-400 font-semibold">{user.amount.toFixed(2)} π</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Recent Activity */}
+        <Card className="bg-slate-800/50 border-slate-700 p-6">
+          <h3 className="text-lg font-bold text-white mb-4">Recent Activity</h3>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {activities.map((activity) => (
+              <div key={activity.id} className="pb-3 border-b border-slate-700 last:border-0">
+                <p className="text-sm text-gray-300">{activity.message}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {new Date(activity.timestamp).toLocaleTimeString()}
+                </p>
+              </div>
+            ))}
           </div>
         </Card>
       </div>
-
-      {/* Quick Actions */}
-      <Card className="bg-slate-800/50 border-slate-700">
-        <div className="p-6">
-          <h3 className="text-lg font-bold text-white mb-4">Quick Navigation</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link href="/admin/transactions">
-              <Button variant="outline" className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
-                📊 Transactions
-              </Button>
-            </Link>
-            <Link href="/admin/users">
-              <Button variant="outline" className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
-                👥 Users
-              </Button>
-            </Link>
-            <Link href="/admin/tasks">
-              <Button variant="outline" className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
-                📝 Tasks
-              </Button>
-            </Link>
-            <Link href="/admin/submissions">
-              <Button variant="outline" className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
-                ✅ Submissions
-              </Button>
-            </Link>
-            <Link href="/admin/disputes">
-              <Button variant="outline" className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
-                ⚖️ Disputes
-              </Button>
-            </Link>
-            <Link href="/admin/analytics">
-              <Button variant="outline" className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
-                📈 Analytics
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </Card>
-    </div>
+    </>
   );
+}
+
+function DashboardContent() {
+  return <OverviewSection />;
 }
