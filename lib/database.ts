@@ -188,6 +188,19 @@ export async function updateTask(taskId: string, updates: Partial<DatabaseTask>)
   return data as DatabaseTask;
 }
 
+export async function deleteTask(taskId: string) {
+  const { error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId);
+
+  if (error) {
+    console.error('Error deleting task:', error);
+    throw new Error('Failed to delete task');
+  }
+  return true;
+}
+
 export async function getTasksByEmployer(employerId: string) {
   const { data, error } = await supabase
     .from('tasks')

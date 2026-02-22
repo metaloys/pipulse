@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SubmissionReviewModal } from '@/components/submission-review-modal';
+import { TaskManagement } from '@/components/task-management';
 import {
   getTaskSubmissions,
   getTaskById,
@@ -13,9 +14,10 @@ import {
   rejectSubmission,
   createTransaction,
   updateTask,
+  getTasksByEmployer,
 } from '@/lib/database';
 import type { DatabaseTaskSubmission, DatabaseTask, DatabaseUser } from '@/lib/types';
-import { Clock, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle2, XCircle, AlertCircle, LayoutGrid } from 'lucide-react';
 
 interface EmployerDashboardProps {
   employerId: string;
@@ -29,12 +31,19 @@ interface SubmissionWithDetails {
 }
 
 export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboardProps) {
+  const [activeTab, setActiveTab] = useState<'tasks' | 'submissions'>('tasks');
   const [submissions, setSubmissions] = useState<SubmissionWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedSubmission, setSelectedSubmission] = useState<DatabaseTaskSubmission | null>(null);
   const [selectedTask, setSelectedTask] = useState<DatabaseTask | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tasks, setTasks] = useState<DatabaseTask[]>(employerTasks);
+
+  // Reload tasks when prop changes
+  useEffect(() => {
+    setTasks(employerTasks);
+  }, [employerTasks]);
 
   useEffect(() => {
     loadSubmissions();
@@ -132,6 +141,14 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
     }
   };
 
+  const handleTasksUpdated = async () => {
+    // Reload tasks from database
+    const updatedTasks = await getTasksByEmployer(employerId);
+    setTasks(updatedTasks);
+    // Reload submissions too
+    await loadSubmissions();
+  };
+
   const pendingSubmissions = submissions.filter(
     (item) => item.submission.submission_status === 'pending'
   );
@@ -155,21 +172,55 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
 
   return (
     <div className="space-y-6">
-      {error && (
-        <div className="flex gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/50">
-          <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-          <p className="text-sm text-red-400">{error}</p>
-        </div>
+      {/* Tab Navigation */}
+      <div className="flex gap-2 border-b border-white/10">
+        <button
+          onClick={() => setActiveTab('tasks')}
+          className={`flex items-center gap-2 px-4 py-3 font-medium text-sm transition-all duration-200 ${
+            activeTab === 'tasks'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-muted-foreground hover:text-foreground border-b-2 border-transparent'
+          }`}
+        >
+          <LayoutGrid className="w-4 h-4" />
+          My Tasks ({tasks.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('submissions')}
+          className={`flex items-center gap-2 px-4 py-3 font-medium text-sm transition-all duration-200 ${
+            activeTab === 'submissions'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-muted-foreground hover:text-foreground border-b-2 border-transparent'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          Submissions ({submissions.length})
+        </button>
+      </div>
+
+      {/* Tasks Tab Content */}
+      {activeTab === 'tasks' && (
+        <TaskManagement tasks={tasks} onTasksUpdated={handleTasksUpdated} />
       )}
 
-      {/* Pending Submissions Section */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Clock className="w-5 h-5 text-orange-400" />
-          <h2 className="text-xl font-bold text-foreground">
-            Pending Review ({pendingSubmissions.length})
-          </h2>
-        </div>
+      {/* Submissions Tab Content */}
+      {activeTab === 'submissions' && (
+        <div className="space-y-6">
+          {error && (
+            <div className="flex gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/50">
+              <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+          )}
+
+          {/* Pending Submissions Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="w-5 h-5 text-orange-400" />
+              <h2 className="text-xl font-bold text-foreground">
+                Pending Review ({pendingSubmissions.length})
+              </h2>
+            </div>
 
         {pendingSubmissions.length === 0 ? (
           <Card className="glassmorphism p-8 border-white/10 text-center">
@@ -295,6 +346,8 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
           </div>
         )}
       </div>
+        </div>
+      )}
 
       {/* Submission Review Modal */}
       <SubmissionReviewModal
