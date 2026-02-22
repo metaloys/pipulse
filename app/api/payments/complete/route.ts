@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract metadata fields
+    // Extract metadata fields (may be empty for incomplete payments from auth)
     const taskId = metadata?.task_id;
     const workerId = metadata?.worker_id;
     const submissionId = metadata?.submission_id;
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       submissionId,
       workerAmount,
       pipulseFee,
+      hasMetadata: !!metadata,
     });
 
     // Get the PI_API_KEY from environment variables
@@ -119,6 +120,17 @@ export async function POST(request: NextRequest) {
 
     const completionData = await piCompleteResponse.json();
     console.log(`✅ [STEP 1] Payment completed on Pi Network`);
+
+    // ========================================================================
+    // Early exit if this is just incomplete payment recovery (no metadata)
+    // ========================================================================
+    if (!metadata) {
+      console.log(`✅ Incomplete payment resolved (no metadata, skipping database updates)`);
+      return NextResponse.json(
+        { success: true, message: 'Incomplete payment recovered from blockchain' },
+        { status: 200 }
+      );
+    }
 
     // ========================================================================
     // STEP 2: Get payment details from Pi Network
