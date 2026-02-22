@@ -11,16 +11,19 @@ import { createClient } from '@supabase/supabase-js';
  * STEP 2: Get payment details from Pi Network (to confirm amount)
  * STEP 3: Update worker earnings in users table
  * STEP 4: Update submission status in task_submissions table
- * STEP 5: Record transaction in transactions table
+ * STEP 5: Record transaction in transactions table (with correct UUID sender/receiver)
  * STEP 6: Update task slots remaining
+ * 
+ * CRITICAL FIX: sender_id and receiver_id must be UUIDs from users table,
+ * not Pi blockchain wallet addresses. pi_blockchain_txid stores the blockchain tx.
  * 
  * Request body from onReadyForServerCompletion:
  * {
  *   paymentId: string,
- *   txid: string,
+ *   txid: string (blockchain transaction ID),
  *   metadata: {
  *     task_id: string,
- *     worker_id: string,
+ *     worker_id: string (UUID from users table),
  *     submission_id: string,
  *     amount: number (worker payment, after commission),
  *     fee: number (pipulse commission)
@@ -62,14 +65,6 @@ export async function POST(request: NextRequest) {
       pipulseFee,
     });
 
-    // Validate we have minimum required data
-    if (!paymentId || !txid) {
-      return NextResponse.json(
-        { success: false, error: 'Missing required payment fields' },
-        { status: 400 }
-      );
-    }
-
     // Get the PI_API_KEY from environment variables
     const apiKey = process.env.PI_API_KEY;
     if (!apiKey) {
@@ -79,6 +74,18 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Initialize Supabase admin client early for lookups
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
 
     // ========================================================================
     // STEP 1: Complete payment with Pi Network API
@@ -139,23 +146,31 @@ export async function POST(request: NextRequest) {
     }
 
     // ========================================================================
+    // IMPORTANT: Fetch employer ID from task before database updates
+    // ========================================================================
+    let employerId: string | null = null;
+    if (taskId) {
+      console.log(`\n👔 Fetching employer ID for task: ${taskId}`);
+      const { data: taskData, error: taskError } = await supabaseAdmin
+        .from('tasks')
+        .select('employer_id')
+        .eq('id', taskId)
+        .maybeSingle();
+
+      if (taskError) {
+        console.warn(`⚠️ Failed to fetch employer from task:`, taskError);
+      } else if (taskData) {
+        employerId = taskData.employer_id;
+        console.log(`✅ Employer ID found: ${employerId}`);
+      }
+    }
+
+    // ========================================================================
     // Database updates
     // ========================================================================
     if (workerId && submissionId && paymentDetailsAmount) {
       try {
-        console.log(`\n💾 Initializing Supabase admin client for database updates`);
-
-        // Initialize Supabase admin client for backend operations
-        const supabaseAdmin = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-          process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-          {
-            auth: {
-              autoRefreshToken: false,
-              persistSession: false,
-            },
-          }
-        );
+        console.log(`\n💾 Starting database updates sequence`);
 
         // ====================================================================
         // STEP 3: Update worker earnings in users table
@@ -168,7 +183,7 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
 
         if (userFetchError) {
-          console.error(`⚠️ [STEP 3] Failed to fetch user data:`, userFetchError);
+          console.error(`❌ [STEP 3] Failed to fetch user data:`, userFetchError);
         } else if (userData) {
           const newTotalEarnings = (userData.total_earnings || 0) + paymentDetailsAmount;
           const newTasksCompleted = (userData.total_tasks_completed || 0) + 1;
@@ -212,27 +227,43 @@ export async function POST(request: NextRequest) {
 
         // ====================================================================
         // STEP 5: Record transaction in transactions table
+        // CRITICAL FIX: Use UUIDs for sender_id and receiver_id, not wallet addresses
         // ====================================================================
-        console.log(`\n💳 [STEP 5] Recording transaction in database`);
+        console.log(`\n💳 [STEP 5] Recording transaction with correct UUIDs`);
+        console.log(`   sender_id (employer): ${employerId} (UUID)`);
+        console.log(`   receiver_id (worker): ${workerId} (UUID)`);
+        console.log(`   pi_blockchain_txid: ${txid} (blockchain tx)`);
+
         const { error: txError } = await supabaseAdmin
           .from('transactions')
           .insert([{
             task_id: taskId,
-            worker_id: workerId,
-            employer_id: null, // Will be fetched from task if needed
+            sender_id: employerId, // FIXED: Use employer's UUID from users table
+            receiver_id: workerId, // FIXED: Use worker's UUID from users table
             amount: paymentDetailsAmount,
             pipulse_fee: pipulseFee,
-            txid: txid,
-            pi_transaction_id: txid,
-            status: 'completed',
+            pi_blockchain_txid: txid, // FIXED: Store blockchain tx ID here, not as sender_id
+            transaction_type: 'payment',
+            transaction_status: 'completed',
+            timestamp: new Date().toISOString(),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           }]);
 
         if (txError) {
           console.error(`❌ [STEP 5] Failed to record transaction:`, txError);
+          // Log details for debugging
+          console.error(`   Transaction data that failed:`, {
+            task_id: taskId,
+            sender_id: employerId,
+            receiver_id: workerId,
+            amount: paymentDetailsAmount,
+            pipulse_fee: pipulseFee,
+            pi_blockchain_txid: txid,
+          });
         } else {
           console.log(`✅ [STEP 5] Transaction recorded: ${paymentDetailsAmount}π to worker, ${pipulseFee}π fee`);
+          console.log(`   Blockchain txid: ${txid}`);
         }
 
         // ====================================================================
@@ -240,41 +271,31 @@ export async function POST(request: NextRequest) {
         // ====================================================================
         if (taskId) {
           console.log(`\n🎯 [STEP 6] Updating task slots for: ${taskId}`);
-          const { error: slotsError } = await supabaseAdmin
+          
+          // First fetch current slots
+          const { data: taskData } = await supabaseAdmin
             .from('tasks')
-            .update({
-              slots_remaining: await supabaseAdmin.rpc('decrement_slots', { task_id_param: taskId }).catch(() => null),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', taskId);
+            .select('slots_remaining')
+            .eq('id', taskId)
+            .maybeSingle();
 
-          // If RPC fails, try direct update
-          if (slotsError) {
-            console.warn(`⚠️ [STEP 6] Direct slot decrement attempt (RPC failed):`, slotsError);
-            const { data: taskData } = await supabaseAdmin
+          if (taskData) {
+            const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
+            const { error: updateSlotsError } = await supabaseAdmin
               .from('tasks')
-              .select('slots_remaining')
-              .eq('id', taskId)
-              .maybeSingle();
+              .update({
+                slots_remaining: newSlotsRemaining,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', taskId);
 
-            if (taskData) {
-              const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
-              const { error: updateSlotsError } = await supabaseAdmin
-                .from('tasks')
-                .update({
-                  slots_remaining: newSlotsRemaining,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', taskId);
-
-              if (updateSlotsError) {
-                console.error(`❌ [STEP 6] Failed to update slots:`, updateSlotsError);
-              } else {
-                console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining`);
-              }
+            if (updateSlotsError) {
+              console.error(`❌ [STEP 6] Failed to update slots:`, updateSlotsError);
+            } else {
+              console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining`);
             }
           } else {
-            console.log(`✅ [STEP 6] Task slots decremented successfully`);
+            console.warn(`⚠️ [STEP 6] Task not found, skipping slots update`);
           }
         } else {
           console.warn(`⚠️ [STEP 6] No taskId provided, skipping slots update`);
@@ -303,6 +324,7 @@ export async function POST(request: NextRequest) {
           workerId,
           submissionId,
           taskId,
+          employerId,
         },
       },
       { status: 200 }
