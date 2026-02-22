@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { updateTask, deleteTask } from '@/lib/database';
 import type { DatabaseTask, TaskCategory } from '@/lib/types';
-import { Edit2, Trash2, Eye, AlertCircle } from 'lucide-react';
+import { Edit2, Trash2, Eye, AlertCircle, Clock } from 'lucide-react';
 
 interface TaskManagementProps {
   tasks: DatabaseTask[];
@@ -33,7 +33,58 @@ const CATEGORIES: TaskCategory[] = [
   'other',
 ];
 
-export function TaskManagement({ tasks, onTasksUpdated }: TaskManagementProps) {
+// Calculate time remaining until deadline
+function calculateTimeRemaining(deadline: string): {
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+  isExpired: boolean;
+  formatted: string;
+} {
+  const now = new Date();
+  const deadlineDate = new Date(deadline);
+  const diff = deadlineDate.getTime() - now.getTime();
+
+  if (diff <= 0) {
+    return {
+      days: 0,
+      hours: 0,
+      minutes: 0,
+      seconds: 0,
+      isExpired: true,
+      formatted: 'Expired',
+    };
+  }
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+  let formatted = '';
+  if (days > 0) formatted += `${days}d `;
+  if (hours > 0) formatted += `${hours}h `;
+  if (minutes > 0) formatted += `${minutes}m`;
+  if (!formatted) formatted = `${seconds}s`;
+
+  return {
+    days,
+    hours,
+    minutes,
+    seconds,
+    isExpired: false,
+    formatted: formatted.trim(),
+  };
+}
+
+export function TaskManagement({ 
+  tasks, 
+  onTasksUpdated,
+  employerId,
+  employerUsername,
+  onCreateTask,
+}: TaskManagementProps) {
   const [editingTask, setEditingTask] = useState<DatabaseTask | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -42,6 +93,7 @@ export function TaskManagement({ tasks, onTasksUpdated }: TaskManagementProps) {
   const [error, setError] = useState<string | null>(null);
   const [viewingTask, setViewingTask] = useState<DatabaseTask | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<{ [key: string]: ReturnType<typeof calculateTimeRemaining> }>({});
 
   // Form state for editing
   const [formData, setFormData] = useState({
@@ -53,6 +105,21 @@ export function TaskManagement({ tasks, onTasksUpdated }: TaskManagementProps) {
     deadline: '',
     instructions: '',
   });
+
+  // Update countdown timers every second
+  useEffect(() => {
+    const updateTimers = () => {
+      const newTimeRemaining: typeof timeRemaining = {};
+      tasks.forEach((task) => {
+        newTimeRemaining[task.id] = calculateTimeRemaining(task.deadline);
+      });
+      setTimeRemaining(newTimeRemaining);
+    };
+
+    updateTimers();
+    const interval = setInterval(updateTimers, 1000);
+    return () => clearInterval(interval);
+  }, [tasks]);
 
   const handleEditTask = (task: DatabaseTask) => {
     setEditingTask(task);
@@ -204,6 +271,22 @@ export function TaskManagement({ tasks, onTasksUpdated }: TaskManagementProps) {
                       >
                         {task.task_status}
                       </Badge>
+                      {/* Countdown Timer Badge */}
+                      {timeRemaining[task.id] && (
+                        <Badge
+                          variant="outline"
+                          className={`text-xs flex items-center gap-1 ${
+                            timeRemaining[task.id].isExpired
+                              ? 'border-red-500/50 text-red-400'
+                              : timeRemaining[task.id].days < 1
+                              ? 'border-orange-500/50 text-orange-400'
+                              : 'border-green-500/50 text-green-400'
+                          }`}
+                        >
+                          <Clock className="w-3 h-3" />
+                          {timeRemaining[task.id].formatted}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">

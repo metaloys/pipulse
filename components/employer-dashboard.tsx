@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SubmissionReviewModal } from '@/components/submission-review-modal';
 import { TaskManagement } from '@/components/task-management';
+import { CreateTaskModal } from '@/components/create-task-modal';
 import {
   getTaskSubmissions,
   getTaskById,
@@ -200,7 +201,15 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
 
       {/* Tasks Tab Content */}
       {activeTab === 'tasks' && (
-        <TaskManagement tasks={tasks} onTasksUpdated={handleTasksUpdated} />
+        <TaskManagement 
+          tasks={tasks} 
+          onTasksUpdated={handleTasksUpdated}
+          employerId={employerId}
+          employerUsername="employer"
+          onCreateTask={() => {
+            // The CreateTaskModal below will handle the opening
+          }}
+        />
       )}
 
       {/* Submissions Tab Content */}
@@ -358,6 +367,15 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
         onClose={() => setIsReviewModalOpen(false)}
         onApprove={handleApproveSubmission}
         onReject={handleRejectSubmission}
+      />
+
+      {/* Create Task Modal */}
+      <CreateTaskModal
+        employerId={employerId}
+        employerUsername="employer"
+        onTaskCreated={() => {
+          handleTasksUpdated();
+        }}
       />
     </div>
   );
