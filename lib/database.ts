@@ -185,6 +185,7 @@ export async function getAllTasks() {
     .from('tasks')
     .select('*')
     .eq('task_status', 'available')
+    .gt('slots_remaining', 0)  // Only show tasks with available slots
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -200,6 +201,7 @@ export async function getTasksByCategory(category: string) {
     .select('*')
     .eq('category', category)
     .eq('task_status', 'available')
+    .gt('slots_remaining', 0)  // Only show tasks with available slots
     .order('created_at', { ascending: false });
 
   if (error) {

@@ -280,19 +280,24 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
           if (taskData) {
-            const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
-            const { error: updateSlotsError } = await supabaseAdmin
-              .from('tasks')
-              .update({
-                slots_remaining: newSlotsRemaining,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', taskId);
-
-            if (updateSlotsError) {
-              console.error(`❌ [STEP 6] Failed to update slots:`, updateSlotsError);
+            // IMPORTANT: Validate that slots are available before decrementing
+            if ((taskData.slots_remaining || 0) <= 0) {
+              console.warn(`⚠️ [STEP 6] No slots remaining for task, skipping decrement`);
             } else {
-              console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining`);
+              const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
+              const { error: updateSlotsError } = await supabaseAdmin
+                .from('tasks')
+                .update({
+                  slots_remaining: newSlotsRemaining,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', taskId);
+
+              if (updateSlotsError) {
+                console.error(`❌ [STEP 6] Failed to update slots:`, updateSlotsError);
+              } else {
+                console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining`);
+              }
             }
           } else {
             console.warn(`⚠️ [STEP 6] Task not found, skipping slots update`);
