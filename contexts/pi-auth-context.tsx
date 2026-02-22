@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { PI_NETWORK_CONFIG, BACKEND_URLS } from "@/lib/system-config";
 import { api, setApiAuthToken } from "@/lib/api";
+import { createOrUpdateUserOnAuth } from "@/lib/database";
 import {
   initializeGlobalPayment,
   checkIncompletePayments,
@@ -284,6 +285,14 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     setAuthMessage("Logging in...");
 
     const userData = await loginToBackend(accessToken, appId);
+
+    // Auto-create or update user in database
+    try {
+      await createOrUpdateUserOnAuth(userData.id, userData.username);
+    } catch (error) {
+      console.error("Failed to create/update user in database:", error);
+      // Don't block authentication if user creation fails
+    }
 
     setPiAccessToken(accessToken);
     setApiAuthToken(accessToken);

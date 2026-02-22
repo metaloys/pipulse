@@ -45,6 +45,58 @@ export async function createUser(user: Omit<DatabaseUser, 'id' | 'created_at' | 
   return data as DatabaseUser;
 }
 
+/**
+ * Create or update user on first authentication with Pi Network
+ * This is called right after a user authenticates to ensure they exist in Supabase
+ * 
+ * @param userId - Pi Network user ID (uid)
+ * @param username - Pi Network username
+ * @returns The created or updated user record
+ */
+export async function createOrUpdateUserOnAuth(userId: string, username: string) {
+  try {
+    // First check if user exists
+    const existingUser = await getUserById(userId);
+    
+    if (existingUser) {
+      console.log("✅ User already exists in database:", username);
+      return existingUser;
+    }
+
+    // User doesn't exist, create them using raw insert with id
+    console.log("📝 Creating new user in database:", username);
+    const { data, error } = await supabase
+      .from('users')
+      .insert([{
+        id: userId,
+        pi_username: username,
+        balance: 0,
+        total_earnings: 0,
+        total_tasks_completed: 0,
+        current_streak: 0,
+        level: 'Newcomer',
+        verified: true,
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("❌ Failed to create user:", username, error);
+      return null;
+    }
+
+    if (data) {
+      console.log("✅ User created successfully:", username);
+      return data as DatabaseUser;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error in createOrUpdateUserOnAuth:", error);
+    return null;
+  }
+}
+
 export async function updateUser(userId: string, updates: Partial<DatabaseUser>) {
   const { data, error } = await supabase
     .from('users')
