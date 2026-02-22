@@ -1,154 +1,172 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { AdminSidebar } from '@/components/admin-sidebar';
+import { AdminStatsBar } from '@/components/admin-stats-bar';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Eye, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 
 interface Dispute {
   id: string;
   task_id: string;
-  task_title?: string;
-  complainant_id: string;
-  complainant_username?: string;
-  respondent_id: string;
-  respondent_username?: string;
-  complaint_type: string;
+  task_title: string;
+  complainant_username: string;
+  respondent_username: string;
+  dispute_type: 'quality' | 'non_payment' | 'non_delivery' | 'misconduct' | 'other';
   reason: string;
-  status: string;
+  status: 'open' | 'in_review' | 'resolved' | 'dismissed';
+  resolution?: string;
+  admin_decision?: 'complainant_win' | 'respondent_win' | 'split' | 'dismissed';
   created_at: string;
   resolved_at?: string;
-  admin_decision?: string;
   admin_notes?: string;
 }
 
-export default function DisputesPage() {
+interface Stats {
+  totalCommission: number;
+  dailyCommission: number;
+  totalTransactions: number;
+  totalVolume: number;
+}
+
+export default function AdminDisputesPage() {
+  const router = useRouter();
+  const [stats, setStats] = useState<Stats | null>(null);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [filteredDisputes, setFilteredDisputes] = useState<Dispute[]>([]);
+  const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
-  const [showResolutionForm, setShowResolutionForm] = useState(false);
-  const [resolutionData, setResolutionData] = useState({ decision: 'dismiss', notes: '' });
+  const [typeFilter, setTypeFilter] = useState('all');
 
-  // Check authentication
   useEffect(() => {
-    const stored = sessionStorage.getItem('adminAuthenticated');
-    if (stored !== 'true') {
-      window.location.href = '/admin';
-    }
-  }, []);
-
-  // Load disputes
-  useEffect(() => {
-    const loadDisputes = async () => {
-      try {
-        const response = await fetch('/api/admin/disputes');
-        if (!response.ok) throw new Error('Failed to load disputes');
-
-        const data = await response.json();
-        setDisputes(data || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setLoading(false);
+    const checkAuth = () => {
+      const isAuth = sessionStorage.getItem('adminAuthenticated');
+      if (!isAuth) {
+        router.push('/admin');
       }
     };
+    checkAuth();
+    fetchData();
+  }, [router]);
 
-    loadDisputes();
-  }, []);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
 
-  // Filter disputes
-  useEffect(() => {
-    let filtered = disputes;
+      // Fetch stats
+      const statsRes = await fetch('/api/admin/stats');
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setStats(statsData);
+      }
 
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(d => d.status === statusFilter);
+      // Fetch disputes
+      const disputesRes = await fetch('/api/admin/disputes');
+      if (disputesRes.ok) {
+        const disputesData = await disputesRes.json();
+        setDisputes(disputesData || []);
+      }
+
+      setError('');
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError('Failed to load disputes');
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Apply search filter
+  useEffect(() => {
+    let result = [...disputes];
+
+    // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(d =>
-        d.id.toLowerCase().includes(query) ||
-        d.task_title?.toLowerCase().includes(query) ||
-        d.complainant_username?.toLowerCase().includes(query) ||
-        d.respondent_username?.toLowerCase().includes(query)
+      result = result.filter(d =>
+        d.task_title.toLowerCase().includes(query) ||
+        d.complainant_username.toLowerCase().includes(query) ||
+        d.respondent_username.toLowerCase().includes(query)
       );
     }
 
-    setFilteredDisputes(filtered);
-  }, [disputes, searchQuery, statusFilter]);
+    // Status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(d => d.status === statusFilter);
+    }
 
-  const handleResolveDispute = async () => {
-    if (!selectedDispute) return;
+    // Type filter
+    if (typeFilter !== 'all') {
+      result = result.filter(d => d.dispute_type === typeFilter);
+    }
 
-    setActionLoading(selectedDispute.id);
+    // Sort by created date descending
+    result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    setFilteredDisputes(result);
+  }, [disputes, searchQuery, statusFilter, typeFilter]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'open': return 'bg-red-500/20 text-red-400';
+      case 'in_review': return 'bg-yellow-500/20 text-yellow-400';
+      case 'resolved': return 'bg-green-500/20 text-green-400';
+      case 'dismissed': return 'bg-gray-500/20 text-gray-400';
+      default: return 'bg-gray-500/20 text-gray-400';
+    }
+  };
+
+  const getTypeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      'quality': 'bg-orange-500/20 text-orange-400',
+      'non_payment': 'bg-red-500/20 text-red-400',
+      'non_delivery': 'bg-pink-500/20 text-pink-400',
+      'misconduct': 'bg-purple-500/20 text-purple-400',
+      'other': 'bg-blue-500/20 text-blue-400',
+    };
+    return colors[type] || 'bg-gray-500/20 text-gray-400';
+  };
+
+  const resolveDispute = async (submissionId: string, decision: string, notes: string) => {
     try {
-      const response = await fetch('/api/admin/disputes/resolve', {
+      await fetch(`/api/admin/disputes/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          disputeId: selectedDispute.id,
-          decision: resolutionData.decision,
-          notes: resolutionData.notes,
-        }),
+        body: JSON.stringify({ disputeId: submissionId, decision, notes }),
       });
-
-      if (!response.ok) throw new Error('Failed to resolve dispute');
-
-      setDisputes(disputes.map(d =>
-        d.id === selectedDispute.id
-          ? {
-              ...d,
-              status: 'resolved',
-              admin_decision: resolutionData.decision,
-              admin_notes: resolutionData.notes,
-              resolved_at: new Date().toISOString(),
-            }
-          : d
-      ));
-
-      setShowResolutionForm(false);
-      setSelectedDispute(null);
+      fetchData();
+      setShowDetails(false);
     } catch (err) {
-      alert('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setActionLoading(null);
+      console.error('Error resolving dispute:', err);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Header */}
-      <div className="bg-slate-800/50 border-b border-purple-500/20 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/admin">
-              <Button variant="outline" className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-white">Disputes</h1>
-              <p className="text-sm text-gray-400">Resolve user disputes and complaints</p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-slate-900">
+      <AdminSidebar />
+      <div className="ml-64 p-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">Disputes</h1>
+          <p className="text-gray-400">Review and resolve user disputes</p>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Search and Filters */}
+        {/* Stats Bar */}
+        <AdminStatsBar stats={stats || undefined} loading={loading} />
+
+        {/* Filters Card */}
         <Card className="bg-slate-800/50 border-slate-700 mb-6 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <h3 className="text-lg font-bold text-white mb-4">Filters & Search</h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* Search */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Search</label>
@@ -156,7 +174,7 @@ export default function DisputesPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <Input
                   type="text"
-                  placeholder="Search by ID, task, or user..."
+                  placeholder="Task or user..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder-gray-400"
@@ -172,20 +190,79 @@ export default function DisputesPage() {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 text-white rounded-md focus:outline-none focus:border-purple-500"
               >
-                <option value="all">All Statuses</option>
+                <option value="all">All Status</option>
                 <option value="open">Open</option>
+                <option value="in_review">In Review</option>
                 <option value="resolved">Resolved</option>
+                <option value="dismissed">Dismissed</option>
               </select>
             </div>
 
-            {/* Stats */}
+            {/* Type Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 text-white rounded-md focus:outline-none focus:border-purple-500"
+              >
+                <option value="all">All Types</option>
+                <option value="quality">Quality Issue</option>
+                <option value="non_payment">Non-Payment</option>
+                <option value="non_delivery">Non-Delivery</option>
+                <option value="misconduct">Misconduct</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            {/* Refresh Button */}
             <div className="flex items-end">
-              <Card className="bg-purple-500/20 border-purple-500/50 w-full p-3">
-                <p className="text-sm text-gray-300">Total Disputes: <span className="font-bold text-white">{disputes.length}</span></p>
-              </Card>
+              <Button
+                onClick={fetchData}
+                variant="outline"
+                className="w-full bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Clear Filters */}
+            <div className="flex items-end">
+              <Button
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                  setTypeFilter('all');
+                }}
+                variant="outline"
+                className="w-full border-gray-500/50 text-gray-400 hover:bg-gray-500/10"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Clear
+              </Button>
             </div>
           </div>
         </Card>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card className="bg-slate-800/50 border-slate-700 p-4">
+            <p className="text-gray-400 text-sm">Total Disputes</p>
+            <p className="text-3xl font-bold text-white mt-2">{disputes.length}</p>
+          </Card>
+          <Card className="bg-slate-800/50 border-slate-700 p-4">
+            <p className="text-gray-400 text-sm">Open</p>
+            <p className="text-3xl font-bold text-red-400 mt-2">{disputes.filter(d => d.status === 'open').length}</p>
+          </Card>
+          <Card className="bg-slate-800/50 border-slate-700 p-4">
+            <p className="text-gray-400 text-sm">In Review</p>
+            <p className="text-3xl font-bold text-yellow-400 mt-2">{disputes.filter(d => d.status === 'in_review').length}</p>
+          </Card>
+          <Card className="bg-slate-800/50 border-slate-700 p-4">
+            <p className="text-gray-400 text-sm">Resolved</p>
+            <p className="text-3xl font-bold text-green-400 mt-2">{disputes.filter(d => d.status === 'resolved').length}</p>
+          </Card>
+        </div>
 
         {/* Disputes Table */}
         <Card className="bg-slate-800/50 border-slate-700 overflow-hidden">
@@ -218,55 +295,34 @@ export default function DisputesPage() {
                 <tbody className="divide-y divide-slate-700">
                   {filteredDisputes.map((dispute) => (
                     <tr key={dispute.id} className="hover:bg-slate-700/30 transition">
+                      <td className="px-6 py-4 font-medium text-white truncate max-w-xs">{dispute.task_title}</td>
+                      <td className="px-6 py-4 text-gray-300">{dispute.complainant_username}</td>
+                      <td className="px-6 py-4 text-gray-300">{dispute.respondent_username}</td>
                       <td className="px-6 py-4">
-                        <div className="text-gray-300 font-medium max-w-xs truncate">{dispute.task_title}</div>
-                        <div className="text-xs text-gray-500 font-mono">{dispute.task_id.slice(0, 8)}...</div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-300">
-                        {dispute.complainant_username}
-                      </td>
-                      <td className="px-6 py-4 text-gray-300">
-                        {dispute.respondent_username}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                          dispute.complaint_type === 'quality_issue'
-                            ? 'bg-orange-500/20 text-orange-400'
-                            : dispute.complaint_type === 'payment_issue'
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-blue-500/20 text-blue-400'
-                        }`}>
-                          {dispute.complaint_type.replace(/_/g, ' ')}
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getTypeColor(dispute.dispute_type)}`}>
+                          {dispute.dispute_type.replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                          dispute.status === 'resolved'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-yellow-500/20 text-yellow-400'
-                        }`}>
-                          {dispute.status}
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(dispute.status)}`}>
+                          {dispute.status.replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-400 text-xs">
-                        {new Date(dispute.created_at).toLocaleString()}
+                        {new Date(dispute.created_at).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        {dispute.status === 'open' ? (
-                          <Button
-                            onClick={() => {
-                              setSelectedDispute(dispute);
-                              setShowResolutionForm(true);
-                            }}
-                            size="sm"
-                            variant="outline"
-                            className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
-                          >
-                            Resolve
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-gray-500">Resolved</span>
-                        )}
+                      <td className="px-6 py-4 text-center space-x-2">
+                        <Button
+                          onClick={() => {
+                            setSelectedDispute(dispute);
+                            setShowDetails(true);
+                          }}
+                          size="sm"
+                          variant="outline"
+                          className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -276,75 +332,131 @@ export default function DisputesPage() {
           )}
         </Card>
 
-        {/* Results Count */}
-        <div className="mt-4 text-sm text-gray-400">
-          Showing {filteredDisputes.length} of {disputes.length} disputes
-        </div>
-      </div>
+        {/* Dispute Detail Modal */}
+        {showDetails && selectedDispute && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="bg-slate-800 border-slate-700 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold text-white mb-6">Dispute Details</h2>
 
-      {/* Resolution Modal */}
-      {showResolutionForm && selectedDispute && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="bg-slate-800 border-slate-700 max-w-2xl w-full">
-            <div className="p-6">
-              <h2 className="text-xl font-bold text-white mb-4">Resolve Dispute</h2>
-
-              <div className="space-y-4 mb-6">
-                <div>
-                  <p className="text-sm text-gray-400 mb-2">Dispute Details</p>
-                  <div className="bg-slate-700/50 p-4 rounded border border-slate-600 text-sm text-gray-300 space-y-2">
-                    <p><span className="text-gray-400">Task:</span> {selectedDispute.task_title}</p>
-                    <p><span className="text-gray-400">Complainant:</span> {selectedDispute.complainant_username}</p>
-                    <p><span className="text-gray-400">Respondent:</span> {selectedDispute.respondent_username}</p>
-                    <p><span className="text-gray-400">Type:</span> {selectedDispute.complaint_type.replace(/_/g, ' ')}</p>
-                    <p><span className="text-gray-400">Reason:</span> {selectedDispute.reason}</p>
+                <div className="space-y-4">
+                  {/* Task Info */}
+                  <div className="bg-slate-700/30 p-4 rounded-lg">
+                    <p className="text-sm text-gray-400 mb-2">Task</p>
+                    <p className="text-white font-semibold">{selectedDispute.task_title}</p>
                   </div>
+
+                  {/* Parties */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Complainant</p>
+                      <p className="text-white font-semibold">{selectedDispute.complainant_username}</p>
+                    </div>
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Respondent</p>
+                      <p className="text-white font-semibold">{selectedDispute.respondent_username}</p>
+                    </div>
+                  </div>
+
+                  {/* Type and Status */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Dispute Type</p>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getTypeColor(selectedDispute.dispute_type)}`}>
+                        {selectedDispute.dispute_type.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Status</p>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(selectedDispute.status)}`}>
+                        {selectedDispute.status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Reason */}
+                  <div className="bg-slate-700/30 p-4 rounded-lg">
+                    <p className="text-sm text-gray-400 mb-2">Complaint Reason</p>
+                    <p className="text-white">{selectedDispute.reason}</p>
+                  </div>
+
+                  {/* Dates */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Filed</p>
+                      <p className="text-white text-sm">{new Date(selectedDispute.created_at).toLocaleString()}</p>
+                    </div>
+                    {selectedDispute.resolved_at && (
+                      <div className="bg-slate-700/30 p-4 rounded-lg">
+                        <p className="text-sm text-gray-400 mb-1">Resolved</p>
+                        <p className="text-white text-sm">{new Date(selectedDispute.resolved_at).toLocaleString()}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Admin Notes (if resolved) */}
+                  {selectedDispute.admin_notes && (
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-2">Admin Notes</p>
+                      <p className="text-white">{selectedDispute.admin_notes}</p>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Admin Decision</label>
-                  <select
-                    value={resolutionData.decision}
-                    onChange={(e) => setResolutionData({ ...resolutionData, decision: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 text-white rounded-md focus:outline-none focus:border-purple-500"
-                  >
-                    <option value="dismiss">Dismiss Dispute</option>
-                    <option value="uphold">Uphold Complaint</option>
-                    <option value="partial">Partial Resolution</option>
-                  </select>
-                </div>
+                {/* Action Buttons */}
+                {selectedDispute.status === 'open' || selectedDispute.status === 'in_review' ? (
+                  <div className="mt-6 space-y-2">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-300">Decision</label>
+                      <select
+                        id="decision"
+                        className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 text-white rounded-md focus:outline-none focus:border-purple-500"
+                      >
+                        <option value="complainant_win">Award to Complainant</option>
+                        <option value="respondent_win">Award to Respondent</option>
+                        <option value="split">Split Resolution</option>
+                        <option value="dismissed">Dismiss Dispute</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-300">Notes</label>
+                      <textarea
+                        id="notes"
+                        placeholder="Enter resolution notes..."
+                        className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 text-white rounded-md focus:outline-none focus:border-purple-500 h-20 resize-none"
+                      />
+                    </div>
+                    <Button
+                      onClick={() => {
+                        const decision = (document.getElementById('decision') as HTMLSelectElement)?.value || 'dismissed';
+                        const notes = (document.getElementById('notes') as HTMLTextAreaElement)?.value || '';
+                        if (notes.trim()) {
+                          resolveDispute(selectedDispute.id, decision, notes);
+                        }
+                      }}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Resolve Dispute
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-6 bg-slate-700/30 p-4 rounded-lg text-center">
+                    <p className="text-gray-300">This dispute has been resolved</p>
+                  </div>
+                )}
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Admin Notes</label>
-                  <textarea
-                    value={resolutionData.notes}
-                    onChange={(e) => setResolutionData({ ...resolutionData, notes: e.target.value })}
-                    placeholder="Enter decision details and notes..."
-                    className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 text-white rounded-md focus:outline-none focus:border-purple-500 h-24 resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3">
                 <Button
-                  onClick={handleResolveDispute}
-                  disabled={actionLoading === selectedDispute.id || !resolutionData.notes}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => setShowDetails(false)}
+                  className="w-full mt-4 bg-slate-700 hover:bg-slate-600 text-white"
                 >
-                  {actionLoading === selectedDispute.id ? 'Resolving...' : 'Resolve Dispute'}
-                </Button>
-                <Button
-                  onClick={() => setShowResolutionForm(false)}
-                  variant="outline"
-                  className="flex-1 border-gray-500/50 text-gray-400 hover:bg-gray-500/10"
-                >
-                  Cancel
+                  Close
                 </Button>
               </div>
-            </div>
-          </Card>
-        </div>
-      )}
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
