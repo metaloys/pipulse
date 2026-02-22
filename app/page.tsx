@@ -86,8 +86,21 @@ export default function HomePage() {
         if (userData?.id) {
           const realStats = await getUserStats(userData.id);
           if (realStats) {
+            console.log('📊 User stats loaded from database:', {
+              userId: userData.id,
+              dailyEarnings: realStats.dailyEarnings,
+              weeklyEarnings: realStats.weeklyEarnings,
+              totalEarnings: realStats.totalEarnings,
+              tasksCompleted: realStats.tasksCompleted,
+              level: realStats.level,
+              currentStreak: realStats.currentStreak,
+            });
             setUserStats(realStats);
+          } else {
+            console.warn('⚠️ No stats returned for user:', userData.id);
           }
+        } else {
+          console.warn('⚠️ userData.id not available');
         }
 
         // If user is an employer, load their tasks

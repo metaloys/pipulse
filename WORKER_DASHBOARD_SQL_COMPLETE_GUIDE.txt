@@ -1,0 +1,224 @@
+================================================================================
+              WORKER DASHBOARD & SQL TEST DATA - COMPLETE GUIDE
+================================================================================
+
+🎯 CURRENT SITUATION
+════════════════════════════════════════════════════════════════════════════════
+
+1. ✅ WORKER DASHBOARD IS WORKING CORRECTLY
+   ├─ It's fetching real data from your Supabase database
+   ├─ Displays actual user's earnings: total_earnings column
+   ├─ Displays actual user's completed tasks: total_tasks_completed column
+   ├─ Displays daily/weekly earnings from transactions table
+   └─ Shows: "Today's Earnings: 0π" because YOUR user account has 0 earnings
+
+2. ✅ SQL TEST DATA SCRIPT IS READY
+   ├─ File: LEADERBOARD_TEST_DATA_INSERT.sql
+   ├─ Fixed: All UUIDs are now valid
+   ├─ Fixed: pi_wallet_address is populated with real values
+   ├─ Fixed: requirements column uses ARRAY[] instead of jsonb
+   └─ Ready to run in Supabase SQL Editor
+
+
+❌ WHY DASHBOARD SHOWS "0 Tasks, 0 Earnings"
+════════════════════════════════════════════════════════════════════════════════
+
+When you log in to PiPulse:
+
+1. Supabase creates a new user record in your users table
+2. Your user record has default values:
+   ├─ total_earnings = 0
+   ├─ total_tasks_completed = 0
+   └─ ... other default values
+
+3. The dashboard loads this data and displays it:
+   ├─ Today's Earnings: 0π        ← From database (your actual earnings)
+   ├─ Tasks Completed: 0          ← From database (your actual count)
+   ├─ Available Tasks: X          ← From tasks table (all tasks you haven't done)
+   └─ Weekly Earnings: 0π         ← From transactions table (your actual payments)
+
+4. This is CORRECT behavior - it's showing YOUR actual data!
+
+
+✅ HOW TO SEE TEST DATA IN LEADERBOARD
+════════════════════════════════════════════════════════════════════════════════
+
+The LEADERBOARD displays DIFFERENT users (test workers we'll insert), not you:
+
+Test Data Includes:
+  └─ 10 Test Workers (pro_worker_elite, expert_tasker, etc.) with earnings:
+     ├─ pro_worker_elite:    1250.50π earned, 87 tasks completed
+     ├─ expert_tasker:        950.25π earned, 65 tasks completed
+     ├─ steady_earner:        750.75π earned, 52 tasks completed
+     └─ ... 7 more workers
+
+  └─ 3 Test Employers with tasks:
+     ├─ employer_plus:       10 tasks posted
+     ├─ task_master_emp:      8 tasks posted
+     └─ quality_employer:     6 tasks posted
+
+
+📋 STEP-BY-STEP: INSERT TEST DATA
+════════════════════════════════════════════════════════════════════════════════
+
+STEP 1: Copy the SQL Script
+───────────────────────────
+1. Open file: LEADERBOARD_TEST_DATA_INSERT.sql (entire content)
+2. Ctrl+A to select all
+3. Ctrl+C to copy
+
+
+STEP 2: Run in Supabase
+───────────────────────
+1. Go to: https://supabase.com/dashboard
+2. Select your PiPulse project
+3. Click "SQL Editor" (left sidebar)
+4. Click "New Query" (top right)
+5. Paste the SQL script (Ctrl+V)
+6. Click "Run" button or press Ctrl+Enter
+7. Wait for completion (should see green checkmarks)
+
+
+STEP 3: Verify Data Was Inserted
+──────────────────────────────────
+In the same SQL Editor, run this verification query:
+
+SELECT 'Test Workers' as category, COUNT(*) as count 
+FROM public.users 
+WHERE pi_username LIKE 'pro_worker_%' OR pi_username LIKE 'expert_%' 
+   OR pi_username LIKE 'steady_%' OR pi_username LIKE 'active_%'
+   OR pi_username LIKE 'reliable_%' OR pi_username LIKE 'task_%'
+   OR pi_username LIKE 'grind_%' OR pi_username LIKE 'hustle_%'
+   OR pi_username LIKE 'consistent_%' OR pi_username LIKE 'new_%'
+UNION ALL
+SELECT 'Test Employers', COUNT(*) 
+FROM public.users 
+WHERE pi_username IN ('employer_plus', 'task_master_emp', 'quality_employer')
+UNION ALL
+SELECT 'Test Tasks', COUNT(*) 
+FROM public.tasks 
+WHERE employer_id IN (
+  '550e8400-e29b-41d4-a716-446655550001'::uuid,
+  '550e8400-e29b-41d4-a716-446655550002'::uuid,
+  '550e8400-e29b-41d4-a716-446655550003'::uuid
+);
+
+Expected Results:
+├─ Test Workers: 10
+├─ Test Employers: 3
+└─ Test Tasks: 24
+
+
+STEP 4: Refresh PiPulse App
+─────────────────────────────
+1. Close/refresh your browser tab running PiPulse
+2. Go back to: http://localhost:3000 (or your app URL)
+3. Scroll down to LEADERBOARD section
+4. Click "Top Earners" tab
+5. You should now see the 10 test workers with their earnings!
+
+
+📊 EXPECTED LEADERBOARD DISPLAY
+════════════════════════════════════════════════════════════════════════════════
+
+After inserting test data, the leaderboard will show:
+
+TOP EARNERS TAB:
+  🥇 #1  pro_worker_elite      1250.50π   87 tasks    Elite Pioneer
+  🥈 #2  expert_tasker          950.25π   65 tasks    Advanced
+  🥉 #3  steady_earner          750.75π   52 tasks    Established
+  #4     active_pioneer         625.00π   43 tasks    Established
+  #5     reliable_worker        540.30π   38 tasks    Established
+  #6     task_master            480.60π   33 tasks    Advanced
+  #7     grind_worker           420.40π   29 tasks    Established
+  #8     hustle_mode            385.75π   26 tasks    Established
+  #9     consistent_worker      340.20π   22 tasks    Newcomer
+  #10    new_grinder            285.50π   19 tasks    Newcomer
+
+TOP EMPLOYERS TAB:
+  #1  employer_plus       10 tasks    75.50π spent
+  #2  task_master_emp      8 tasks    69.75π spent
+  #3  quality_employer     6 tasks    60.25π spent
+
+RISING STARS TAB:
+  (Workers from last 30 days with earnings > 0)
+  └─ Shows: consistent_worker, new_grinder (newest members)
+
+
+⚠️ IMPORTANT: YOUR PERSONAL DASHBOARD
+════════════════════════════════════════════════════════════════════════════════
+
+Your Worker Dashboard still shows:
+├─ Today's Earnings: 0π           ← YOUR earnings (you haven't completed tasks yet)
+├─ Tasks Completed: 0             ← YOUR count (you haven't submitted any)
+├─ Available Tasks: 24            ← Number of test tasks available (from test employers)
+└─ Weekly Earnings: 0π            ← YOUR weekly total
+
+This is CORRECT because:
+  ✅ You just logged in (new user)
+  ✅ You haven't completed any tasks yet
+  ✅ You haven't earned any Pi yet
+  ✅ Database shows your ACTUAL real data
+
+To increase YOUR earnings:
+  1. Pick an available task from the task list
+  2. Submit a completion proof
+  3. Admin approves your submission
+  4. Pi payment is processed
+  5. Your earnings update automatically
+
+
+🔄 DATA FLOW - HOW EVERYTHING CONNECTS
+════════════════════════════════════════════════════════════════════════════════
+
+User Dashboard (Shows YOUR Data):
+  └─ queries getUserStats(yourUserId)
+      └─ reads your total_earnings from users table
+         reads your total_tasks_completed from users table
+         reads your transactions from transactions table
+
+Leaderboard (Shows ALL Top Workers):
+  └─ queries getTopEarners() / getTopEmployers() / getRisingStars()
+      └─ reads top 10 from users table sorted by earnings DESC
+         reads all user transactions summed by employer
+         reads newest users from last 30 days with earnings > 0
+
+
+📝 FILES READY
+════════════════════════════════════════════════════════════════════════════════
+
+✅ LEADERBOARD_TEST_DATA_INSERT.sql
+   - 10 test worker users with earnings
+   - 3 test employer users
+   - 24 test tasks
+   - All UUIDs are valid
+   - All wallet addresses populated
+   - requirements field is correct format (ARRAY[])
+   - READY TO RUN
+
+✅ app/page.tsx
+   - Worker dashboard component
+   - Calls getUserStats(userData.id)
+   - Displays real database data
+
+✅ lib/database.ts
+   - getUserStats() function
+   - Fetches from users table
+   - Calculates daily/weekly earnings from transactions
+
+
+🎉 NEXT STEPS
+════════════════════════════════════════════════════════════════════════════════
+
+1. ✅ Run the SQL script in Supabase (see instructions above)
+2. ✅ Refresh the PiPulse app
+3. ✅ View the leaderboard with test data
+4. ✅ Confirm your personal dashboard shows 0 (correct - you're a new user)
+5. ⏭️  Optional: To test task completion workflow:
+   - Pick a test task
+   - Submit it
+   - Have admin approve it
+   - Watch your earnings update automatically!
+
+
+================================================================================
