@@ -173,9 +173,26 @@ const createPaymentCallbacks = (
 ): PiPaymentCallbacks => {
   const onReadyForServerApproval = async (paymentId: string): Promise<void> => {
     try {
-      await api.post(BACKEND_URLS.APPROVE_PAYMENT(paymentId));
+      console.log(`💳 Sending payment approval request to /api/payments/approve: ${paymentId}`);
+      const response = await fetch('/api/payments/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to approve payment');
+      }
+
+      console.log(`✅ Payment approved successfully: ${paymentId}`);
     } catch (error) {
-      console.error("Failed to approve payment:", error);
+      console.error("❌ Failed to approve payment:", error);
+      if (options.onError) {
+        options.onError(
+          error instanceof Error ? error : new Error("Payment approval failed")
+        );
+      }
     }
   };
 
@@ -184,24 +201,35 @@ const createPaymentCallbacks = (
     txid: string
   ): Promise<void> => {
     try {
-      const { data } = await api.get<PiPayment>(
-        BACKEND_URLS.GET_PAYMENT(paymentId)
-      );
-      const currentPayment = data;
+      console.log(`💳 Sending payment completion request to /api/payments/complete: ${paymentId}, txid: ${txid}`);
+      
+      // Extract metadata from options for database updates
+      const { submissionId, amount, workerId } = options.metadata || {};
 
-      const txidMismatch = currentPayment.transaction.txid !== txid;
-      if (txidMismatch) {
-        console.error("Transaction ID mismatch detected");
-        return;
+      const response = await fetch('/api/payments/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentId,
+          txid,
+          submissionId,
+          amount,
+          workerId,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to complete payment');
       }
 
-      await completePaymentWithReward(currentPayment, txid);
+      console.log(`✅ Payment completed successfully: ${paymentId}`);
 
       if (options.onComplete) {
-        options.onComplete(currentPayment.metadata);
+        options.onComplete(options.metadata);
       }
     } catch (error) {
-      console.error("Failed to complete payment:", error);
+      console.error("❌ Failed to complete payment:", error);
       if (options.onError) {
         options.onError(
           error instanceof Error
