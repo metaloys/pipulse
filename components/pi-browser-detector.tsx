@@ -16,17 +16,30 @@ export function PiBrowserDetector() {
         return;
       }
 
-      // Check if already available
+      // Check immediately
       if ((window as any).Pi) {
         console.log("✅ Pi SDK detected immediately");
         setIsLoading(false);
         return;
       }
 
-      // Give Pi SDK more time to load (up to 3 seconds)
-      // Check every 100ms instead of just once
+      // Check if we are inside sandbox iframe by looking at URL and iframe indicators
+      // This is key for detecting Pi Browser sandbox environment
+      const isSandbox = window.location.ancestorOrigins?.length > 0 || 
+        document.referrer.includes('sandbox.minepi.com') ||
+        document.referrer.includes('minepi.com') ||
+        window.self !== window.top;
+
+      if (isSandbox) {
+        console.log("✅ Inside Pi Browser iframe - skipping SDK check and letting auth context handle it");
+        setIsLoading(false);
+        return;
+      }
+
+      // Give Pi SDK time to load (up to 10 seconds)
+      // This runs only if NOT in iframe (regular browser)
       let attempts = 0;
-      const maxAttempts = 30; // 30 * 100ms = 3 seconds
+      const maxAttempts = 100; // 100 * 100ms = 10 seconds
 
       const timer = setInterval(() => {
         attempts++;
@@ -40,7 +53,7 @@ export function PiBrowserDetector() {
         }
 
         if (attempts >= maxAttempts) {
-          console.log("⚠️ Pi SDK not detected after 3 seconds - not in Pi Browser");
+          console.log("⚠️ Pi SDK not detected after 10 seconds - not in Pi Browser");
           clearInterval(timer);
           setIsNotPiBrowser(true);
           setIsLoading(false);
