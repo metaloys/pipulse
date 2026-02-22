@@ -203,8 +203,11 @@ const createPaymentCallbacks = (
     try {
       console.log(`💳 Sending payment completion request to /api/payments/complete: ${paymentId}, txid: ${txid}`);
       
-      // Extract metadata from options for database updates
-      const { submissionId, amount, workerId } = options.metadata || {};
+      // Extract metadata values for API request
+      const metadata = options.metadata || {};
+      const submissionId = metadata.submission_id || metadata.submissionId;
+      const workerId = metadata.worker_id || metadata.workerId;
+      const amount = metadata.amount;
 
       const response = await fetch('/api/payments/complete', {
         method: 'POST',
@@ -215,6 +218,7 @@ const createPaymentCallbacks = (
           submissionId,
           amount,
           workerId,
+          metadata, // Also send full metadata for reference
         }),
       });
 
@@ -295,11 +299,27 @@ export const checkIncompletePayments = async (
   try {
     console.log("Found incomplete payment:", payment.identifier);
 
-    await api.post(BACKEND_URLS.COMPLETE_PAYMENT(payment.identifier), {
-      txid: payment.transaction.txid,
+    // Use our server-side endpoint instead of Pi Network API directly
+    // Server-side has PI_API_KEY authorization
+    const response = await fetch('/api/payments/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        paymentId: payment.identifier,
+        txid: payment.transaction.txid,
+        metadata: payment.metadata || {},
+      }),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    console.log("✅ Incomplete payment recovered:", payment.identifier);
   } catch (error) {
-    console.error("Failed to notify incomplete payment:", error);
+    console.error("Failed to recover incomplete payment:", error);
+    // Don't throw - incomplete payments should not block authentication
   }
 };
 
