@@ -122,9 +122,9 @@ function waitForPiSDK(): Promise<boolean> {
       return;
     }
 
-    // Check every 100ms for up to 5 seconds
+    // Check every 100ms for up to 10 seconds
     let attempts = 0;
-    const maxAttempts = 50; // 50 * 100ms = 5 seconds
+    const maxAttempts = 100; // 100 * 100ms = 10 seconds
 
     const timer = setInterval(() => {
       attempts++;
@@ -137,7 +137,7 @@ function waitForPiSDK(): Promise<boolean> {
       }
 
       if (attempts >= maxAttempts) {
-        console.log("⏱️ Pi SDK not available after 5 seconds");
+        console.log("⏱️ Pi SDK not available after 10 seconds");
         clearInterval(timer);
         resolve(false);
       }
@@ -365,22 +365,11 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
           console.log("✅ Pi Network authentication successful!");
         } else {
           // Pi SDK not available - not in Pi Browser
-          console.log("⚠️ Pi SDK not available - using demo mode");
-          setAuthMessage("Entering demo mode (Pi Browser not detected)...");
-          
-          // Create a mock user for testing
-          const mockUser: LoginDTO = {
-            id: "demo-user",
-            username: "demo_user",
-            credits_balance: 10,
-            terms_accepted: true,
-            app_id: "pipulse-demo",
-          };
-          
-          setPiAccessToken("demo-token");
-          setApiAuthToken("demo-token");
-          setUserData(mockUser);
-          setAppId(mockUser.app_id);
+          console.error("❌ Pi SDK not available. App must be opened in Pi Browser.");
+          const errorMsg = "Pi SDK not available. Please open this app inside Pi Browser.";
+          setAuthMessage(`Error: ${errorMsg}`);
+          setError(errorMsg);
+          throw new Error(errorMsg);
         }
       }
 
