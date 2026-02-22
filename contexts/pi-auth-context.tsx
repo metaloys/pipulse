@@ -108,42 +108,58 @@ const loadPiSDK = (): Promise<void> => {
 };
 
 /**
- * Waits for window.Pi to be available (for up to 5 seconds)
- * The Pi Browser loads the SDK asynchronously, so we need to wait for it
+ * Loads and waits for Pi SDK to be available
+ * In sandbox iframe, the SDK is injected by parent but we need to explicitly load it
  * 
  * @returns {Promise<boolean>} Returns true if Pi SDK became available, false if timeout
  */
-function waitForPiSDK(): Promise<boolean> {
-  return new Promise((resolve) => {
-    // Check if already available
-    if (typeof window.Pi !== "undefined") {
+const loadAndWaitForPiSDK = async (): Promise<boolean> => {
+  return new Promise((resolve, reject) => {
+    // Check if already loaded
+    if (typeof (window as any).Pi !== 'undefined') {
       console.log("✅ Pi SDK already available");
       resolve(true);
       return;
     }
 
-    // Check every 100ms for up to 10 seconds
+    // Check if script already added
+    const existingScript = document.querySelector(
+      'script[src="https://sdk.minepi.com/pi-sdk.js"]'
+    );
+    
+    if (existingScript) {
+      console.log("⏳ Pi SDK script already in DOM, waiting for window.Pi...");
+    } else {
+      // Add script manually (in case it wasn't auto-loaded)
+      console.log("📥 Adding Pi SDK script to document...");
+      const script = document.createElement('script');
+      script.src = 'https://sdk.minepi.com/pi-sdk.js';
+      script.async = false;
+      document.head.appendChild(script);
+    }
+
+    // Now wait for window.Pi to appear
     let attempts = 0;
-    const maxAttempts = 100; // 100 * 100ms = 10 seconds
+    const maxAttempts = 150; // 150 * 100ms = 15 seconds
 
     const timer = setInterval(() => {
       attempts++;
       
-      if (typeof window.Pi !== "undefined") {
-        console.log(`✅ Pi SDK detected after ${attempts * 100}ms`);
+      if (typeof (window as any).Pi !== 'undefined') {
+        console.log(`✅ Pi SDK ready after ${attempts * 100}ms`);
         clearInterval(timer);
         resolve(true);
         return;
       }
 
       if (attempts >= maxAttempts) {
-        console.log("⏱️ Pi SDK not available after 10 seconds");
+        console.log("⏱️ Pi SDK not available after 15 seconds");
         clearInterval(timer);
-        resolve(false);
+        reject(new Error("Pi SDK not available. Please open this app inside Pi Browser."));
       }
     }, 100);
   });
-}
+};
 
 /**
  * Requests authentication credentials from the parent window (App Studio) via postMessage.
@@ -295,7 +311,16 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
 
   const authenticateViaPiSdk = async (): Promise<void> => {
     try {
-      setAuthMessage("Initializing Pi Network SDK...");
+      // Ensure Pi SDK is loaded first
+      setAuthMessage("Loading Pi SDK...");
+      console.log("📥 Ensuring Pi SDK is loaded...");
+      const sdkReady = await loadAndWaitForPiSDK();
+      
+      if (!sdkReady) {
+        throw new Error("Pi SDK not available. Please open this app inside Pi Browser.");
+      }
+
+      setAuthMessage("Initializing Pi Network...");
       console.log("📍 Initializing Pi SDK with config:", PI_NETWORK_CONFIG);
       
       await window.Pi.init({
@@ -351,9 +376,9 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
         console.log("✅ Using parent credentials from App Studio");
         await authenticateAndLogin(parentCredentials.accessToken, parentCredentials.appId);
       } else {
-        // Wait for Pi SDK to load (up to 5 seconds)
-        console.log("⏳ Waiting for Pi SDK to load...");
-        const piSdkAvailable = await waitForPiSDK();
+        // Load and wait for Pi SDK to load (up to 15 seconds)
+        console.log("⏳ Loading and waiting for Pi SDK...");
+        const piSdkAvailable = await loadAndWaitForPiSDK();
         
         if (piSdkAvailable) {
           // Pi SDK is available - we're in Pi Browser
