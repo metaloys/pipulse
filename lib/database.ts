@@ -810,3 +810,597 @@ export async function getPendingDisputeCount() {
   }
   return data.length;
 }
+
+// ============================================================================
+// PROBLEM 1: NOTIFICATIONS SYSTEM FOR REJECTION FEEDBACK
+// ============================================================================
+
+/**
+ * Fetch unread notification count for a user
+ */
+export async function getUnreadNotificationCount(userId: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_read', false);
+
+    if (error) throw error;
+    return count || 0;
+  } catch (error) {
+    console.error('Error fetching unread notification count:', error);
+    return 0;
+  }
+}
+
+/**
+ * Fetch all notifications for a user (paginated)
+ */
+export async function getNotifications(
+  userId: string,
+  limit: number = 20,
+  offset: number = 0
+): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch unread notifications only
+ */
+export async function getUnreadNotifications(
+  userId: string,
+  limit: number = 50
+): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_read', false)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching unread notifications:', error);
+    return [];
+  }
+}
+
+/**
+ * Mark notification as read
+ */
+export async function markNotificationAsRead(notificationId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .eq('id', notificationId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    return false;
+  }
+}
+
+/**
+ * Mark all notifications as read for a user
+ */
+export async function markAllNotificationsAsRead(userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('is_read', false);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+    return false;
+  }
+}
+
+// ============================================================================
+// PROBLEM 2: SUBMISSION WORKFLOW WITH REVISION SUPPORT
+// ============================================================================
+
+/**
+ * Submit a task submission (initial or revision)
+ */
+export async function submitTaskSubmission(input: {
+  taskId: string;
+  workerId: string;
+  proofContent: string;
+  submissionType: 'text' | 'photo' | 'audio' | 'file';
+  revisionNumber?: number;
+}): Promise<DatabaseTaskSubmission | null> {
+  try {
+    const revisionNumber = input.revisionNumber || 1;
+
+    const { data, error } = await supabase
+      .from('task_submissions')
+      .insert({
+        task_id: input.taskId,
+        worker_id: input.workerId,
+        proof_content: input.proofContent,
+        submission_type: input.submissionType,
+        submission_status: revisionNumber > 1 ? 'revision_resubmitted' : 'submitted',
+        revision_number: revisionNumber,
+        resubmitted_at: revisionNumber > 1 ? new Date().toISOString() : null,
+        submitted_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Remove task revision lock if resubmitting
+    if (revisionNumber > 1) {
+      await supabase
+        .from('task_revision_locks')
+        .delete()
+        .eq('task_id', input.taskId)
+        .eq('worker_id', input.workerId);
+    }
+
+    return data as DatabaseTaskSubmission;
+  } catch (error) {
+    console.error('Error submitting task:', error);
+    return null;
+  }
+}
+
+/**
+ * Approve a task submission
+ */
+export async function approveTaskSubmission(input: {
+  submissionId: string;
+  taskId: string;
+  workerId: string;
+  taskReward: number;
+  employerNotes?: string;
+}): Promise<boolean> {
+  try {
+    // Update submission status
+    const { error: updateError } = await supabase
+      .from('task_submissions')
+      .update({
+        submission_status: 'approved',
+        reviewed_at: new Date().toISOString(),
+        employer_notes: input.employerNotes || 'Approved',
+      })
+      .eq('id', input.submissionId);
+
+    if (updateError) throw updateError;
+
+    // Create approval notification via SQL function
+    const { error: notifError } = await supabase
+      .rpc('create_approval_notification', {
+        p_worker_id: input.workerId,
+        p_task_id: input.taskId,
+        p_submission_id: input.submissionId,
+        p_task_reward: input.taskReward,
+      });
+
+    if (notifError) console.error('Error creating notification:', notifError);
+
+    return true;
+  } catch (error) {
+    console.error('Error approving submission:', error);
+    return false;
+  }
+}
+
+/**
+ * Reject a task submission
+ */
+export async function rejectTaskSubmission(input: {
+  submissionId: string;
+  taskId: string;
+  workerId: string;
+  rejectionReason: string;
+  employerNotes?: string;
+}): Promise<boolean> {
+  try {
+    // Update submission status
+    const { error: updateError } = await supabase
+      .from('task_submissions')
+      .update({
+        submission_status: 'rejected',
+        rejection_reason: input.rejectionReason,
+        reviewed_at: new Date().toISOString(),
+        employer_notes: input.employerNotes || input.rejectionReason,
+      })
+      .eq('id', input.submissionId);
+
+    if (updateError) throw updateError;
+
+    // Create rejection notification via SQL function
+    const { error: notifError } = await supabase
+      .rpc('create_rejection_notification', {
+        p_worker_id: input.workerId,
+        p_task_id: input.taskId,
+        p_submission_id: input.submissionId,
+        p_rejection_reason: input.rejectionReason,
+      });
+
+    if (notifError) console.error('Error creating notification:', notifError);
+
+    return true;
+  } catch (error) {
+    console.error('Error rejecting submission:', error);
+    return false;
+  }
+}
+
+/**
+ * Request a revision for a task submission (PROBLEM 2)
+ * Worker gets 7 days to resubmit, task slot is locked
+ */
+export async function requestTaskRevision(input: {
+  submissionId: string;
+  taskId: string;
+  workerId: string;
+  revisionReason: string;
+  employerNotes?: string;
+}): Promise<boolean> {
+  try {
+    // Update submission status to revision_requested
+    const { error: updateError } = await supabase
+      .from('task_submissions')
+      .update({
+        submission_status: 'revision_requested',
+        revision_requested_reason: input.revisionReason,
+        revision_requested_at: new Date().toISOString(),
+        employer_notes: input.employerNotes || input.revisionReason,
+      })
+      .eq('id', input.submissionId);
+
+    if (updateError) throw updateError;
+
+    // Create revision notification and lock task via SQL function
+    const { error: notifError } = await supabase
+      .rpc('create_revision_notification', {
+        p_worker_id: input.workerId,
+        p_task_id: input.taskId,
+        p_submission_id: input.submissionId,
+        p_revision_reason: input.revisionReason,
+      });
+
+    if (notifError) console.error('Error creating revision notification:', notifError);
+
+    return true;
+  } catch (error) {
+    console.error('Error requesting revision:', error);
+    return false;
+  }
+}
+
+// ============================================================================
+// PROBLEM 4: WORKER SUBMISSION HISTORY
+// ============================================================================
+
+/**
+ * Get all submissions for a worker with filters (PROBLEM 4)
+ * Shows complete history including rejected, approved, disputed
+ */
+export async function getWorkerSubmissionsWithFilters(
+  workerId: string,
+  filters?: {
+    status?: string;
+    taskId?: string;
+    limit?: number;
+    offset?: number;
+  }
+): Promise<DatabaseTaskSubmission[]> {
+  try {
+    let query = supabase
+      .from('task_submissions')
+      .select('*')
+      .eq('worker_id', workerId);
+
+    if (filters?.status) {
+      query = query.eq('submission_status', filters.status);
+    }
+
+    if (filters?.taskId) {
+      query = query.eq('task_id', filters.taskId);
+    }
+
+    query = query.order('submitted_at', { ascending: false });
+
+    if (filters?.limit) {
+      const offset = filters.offset || 0;
+      query = query.range(offset, offset + filters.limit - 1);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    return (data || []) as DatabaseTaskSubmission[];
+  } catch (error) {
+    console.error('Error fetching worker submissions:', error);
+    return [];
+  }
+}
+
+/**
+ * Get summary statistics for worker submissions
+ */
+export async function getWorkerSubmissionStats(
+  workerId: string
+): Promise<{
+  totalSubmissions: number;
+  approved: number;
+  rejected: number;
+  revisionRequested: number;
+  disputed: number;
+}> {
+  try {
+    const submissions = await getWorkerSubmissionsWithFilters(workerId);
+
+    return {
+      totalSubmissions: submissions.length,
+      approved: submissions.filter(s => s.submission_status === 'approved').length,
+      rejected: submissions.filter(s => s.submission_status === 'rejected').length,
+      revisionRequested: submissions.filter(s => s.submission_status === 'revision_requested').length,
+      disputed: submissions.filter(s => s.submission_status === 'disputed').length,
+    };
+  } catch (error) {
+    console.error('Error fetching worker submission stats:', error);
+    return {
+      totalSubmissions: 0,
+      approved: 0,
+      rejected: 0,
+      revisionRequested: 0,
+      disputed: 0,
+    };
+  }
+}
+
+// ============================================================================
+// PROBLEM 3: AUTO-APPROVAL TRIGGER AFTER 48 HOURS
+// ============================================================================
+
+/**
+ * Manually trigger auto-approval of submissions older than 48 hours
+ * Can be called via API or scheduled job
+ */
+export async function triggerAutoApprovals(): Promise<{
+  approved: number;
+  error?: string;
+}> {
+  try {
+    const { error } = await supabase
+      .rpc('auto_approve_submissions');
+
+    if (error) throw error;
+
+    // Count auto-approved submissions
+    const { count } = await supabase
+      .from('task_submissions')
+      .select('*', { count: 'exact', head: true })
+      .eq('submission_status', 'approved')
+      .gte('reviewed_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());
+
+    return {
+      approved: count || 0,
+    };
+  } catch (error) {
+    console.error('Error triggering auto-approvals:', error);
+    return {
+      approved: 0,
+      error: String(error),
+    };
+  }
+}
+
+// ============================================================================
+// PROBLEM 5: PRIVACY MODEL - DATA ACCESS CONTROL
+// ============================================================================
+
+/**
+ * Get public user profile (username, level, posted tasks)
+ * RLS policies ensure private data is not returned
+ */
+export async function getPublicUserProfile(
+  userId: string
+): Promise<Partial<DatabaseUser> | null> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, pi_username, level, total_tasks_completed, total_earnings')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw error;
+    return data as Partial<DatabaseUser>;
+  } catch (error) {
+    console.error('Error fetching public user profile:', error);
+    return null;
+  }
+}
+
+/**
+ * Get full user profile (private data)
+ * Only accessible by the user themselves or admins
+ * RLS policies enforce this
+ */
+export async function getPrivateUserProfile(userId: string): Promise<DatabaseUser | null> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw error;
+    return data as DatabaseUser;
+  } catch (error) {
+    console.error('Error fetching private user profile:', error);
+    return null;
+  }
+}
+
+/**
+ * Get transaction details (only for parties involved)
+ * RLS policies enforce visibility
+ */
+export async function getTransactionDetails(transactionId: string): Promise<any> {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', transactionId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error fetching transaction:', error);
+    return null;
+  }
+}
+
+// ============================================================================
+// PROBLEM 6: DEFAULT ROLE & EMPLOYER MODE
+// ============================================================================
+
+/**
+ * Update user's role preference and employer mode
+ * Every new user starts as 'worker' by default
+ * Only switches to employer mode when user explicitly enables it
+ */
+export async function updateUserRolePreference(
+  userId: string,
+  preferences: {
+    defaultRole: 'worker' | 'employer';
+    employerModeEnabled: boolean;
+  }
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        default_role: preferences.defaultRole,
+        employer_mode_enabled: preferences.employerModeEnabled,
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating user role preference:', error);
+    return false;
+  }
+}
+
+/**
+ * Get user's current mode (worker or employer)
+ * Defaults to 'worker' for new users
+ */
+export async function getUserCurrentMode(userId: string): Promise<'worker' | 'employer'> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('default_role')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw error;
+    return (data?.default_role || 'worker') as 'worker' | 'employer';
+  } catch (error) {
+    console.error('Error fetching user mode:', error);
+    return 'worker'; // Default to worker
+  }
+}
+
+/**
+ * Check if user can access employer features
+ */
+export async function canUserAccessEmployerMode(userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('employer_mode_enabled')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw error;
+    return data?.employer_mode_enabled || false;
+  } catch (error) {
+    console.error('Error checking employer mode access:', error);
+    return false;
+  }
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Check if worker has revision lock on a task
+ */
+export async function hasRevisionLock(taskId: string, workerId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('task_revision_locks')
+      .select('id')
+      .eq('task_id', taskId)
+      .eq('worker_id', workerId)
+      .gt('locked_until', new Date().toISOString())
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // 404 is expected
+    return !!data;
+  } catch (error) {
+    console.error('Error checking revision lock:', error);
+    return false;
+  }
+}
+
+/**
+ * Subscribe to real-time notification updates
+ * Useful for notification bell in app header
+ */
+export function subscribeToNotifications(
+  userId: string,
+  callback: (notification: any) => void
+) {
+  const subscription = supabase
+    .channel(`notifications:${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        callback(payload.new);
+      }
+    )
+    .subscribe();
+
+  return subscription;
+}

@@ -9,7 +9,17 @@ export type TaskCategory =
 
 export type TaskStatus = 'available' | 'in-progress' | 'submitted' | 'completed' | 'rejected';
 
-export type UserRole = 'worker' | 'employer';
+export type UserRole = 'worker' | 'employer' | 'admin';
+
+export type SubmissionStatus = 'submitted' | 'revision_requested' | 'revision_resubmitted' | 'approved' | 'rejected' | 'disputed';
+
+export type NotificationType = 
+  | 'submission_approved' 
+  | 'submission_rejected' 
+  | 'revision_requested' 
+  | 'dispute_resolved' 
+  | 'payment_received'
+  | 'task_completed';
 
 // Supabase Database Types
 export interface DatabaseUser {
@@ -17,6 +27,8 @@ export interface DatabaseUser {
   pi_username: string;
   pi_wallet_address: string;
   user_role: UserRole;
+  default_role: 'worker' | 'employer'; // Default view mode
+  employer_mode_enabled: boolean; // Can switch to employer mode
   level: 'Newcomer' | 'Established' | 'Advanced' | 'Elite Pioneer';
   current_streak: number;
   longest_streak: number;
@@ -51,8 +63,13 @@ export interface DatabaseTaskSubmission {
   worker_id: string;
   proof_content: string;
   submission_type: 'text' | 'photo' | 'audio' | 'file';
-  submission_status: 'pending' | 'approved' | 'rejected' | 'resubmitted';
+  submission_status: SubmissionStatus;
   rejection_reason: string | null;
+  revision_number: number;
+  revision_requested_reason: string | null;
+  revision_requested_at: string | null;
+  resubmitted_at: string | null;
+  employer_notes: string | null;
   submitted_at: string;
   reviewed_at: string | null;
   created_at: string;
@@ -101,6 +118,21 @@ export interface DatabaseDispute {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+}
+
+export interface DatabaseNotification {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  related_task_id: string | null;
+  related_submission_id: string | null;
+  related_dispute_id: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Task {
