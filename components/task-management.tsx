@@ -127,13 +127,18 @@ export function TaskManagement({
 
   const handleEditTask = (task: DatabaseTask) => {
     setEditingTask(task);
+    
+    // Format deadline from ISO string to datetime-local format (YYYY-MM-DDTHH:MM)
+    const deadlineDate = new Date(task.deadline);
+    const formattedDeadline = deadlineDate.toISOString().slice(0, 16);
+    
     setFormData({
       title: task.title,
       description: task.description,
       category: task.category,
       pi_reward: task.pi_reward,
       slots_available: task.slots_available,
-      deadline: task.deadline,
+      deadline: formattedDeadline,
       instructions: task.instructions,
     });
     setIsEditModalOpen(true);
