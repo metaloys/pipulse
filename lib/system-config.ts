@@ -4,7 +4,7 @@ export const PI_NETWORK_CONFIG = {
 } as const;
 
 export const BACKEND_CONFIG = {
-  BASE_URL: "https://api.testnet.minepi.com", // Testnet API for sandbox testing
+  BASE_URL: "https://api.minepi.com", // Production API with sandbox mode enabled
   BLOCKCHAIN_BASE_URL: "https://api.testnet.minepi.com", // Testnet blockchain
 } as const;
 
