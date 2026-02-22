@@ -71,7 +71,7 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
         id: userId,
         pi_username: username,
         pi_wallet_address: '', // Empty for now, can be set later
-        user_role: 'user', // Default role
+        user_role: 'worker', // Default role - users start as workers
         level: 'Newcomer',
         current_streak: 0,
         longest_streak: 0,
