@@ -7,9 +7,10 @@ import { TaskCard } from '@/components/task-card';
 import { Leaderboard } from '@/components/leaderboard';
 import { TaskSubmissionModal } from '@/components/task-submission-modal';
 import { EmployerDashboard } from '@/components/employer-dashboard';
+import { CreateTaskModal } from '@/components/create-task-modal';
 import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
-import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats } from '@/lib/database';
+import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById } from '@/lib/database';
 import { mockUserStats } from '@/lib/mock-data';
 import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry } from '@/lib/types';
 import { 
@@ -33,6 +34,25 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<DatabaseTask | null>(null);
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
+  const [isRoleSwitching, setIsRoleSwitching] = useState(false);
+
+  // Load user's current role from database
+  useEffect(() => {
+    const loadUserRole = async () => {
+      if (userData?.id) {
+        try {
+          const user = await getUserById(userData.id);
+          if (user) {
+            console.log('📋 User role from database:', user.user_role);
+            setUserRole(user.user_role);
+          }
+        } catch (error) {
+          console.error('Error loading user role:', error);
+        }
+      }
+    };
+    loadUserRole();
+  }, [userData?.id]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -62,7 +82,7 @@ export default function HomePage() {
         }
 
         // If user is an employer, load their tasks
-        if (userData?.id && userData.app_id) {
+        if (userData?.id && userRole === 'employer') {
           const userEmployerTasks = await getTasksByEmployer(userData.id);
           setEmployerTasks(userEmployerTasks);
         }
@@ -74,10 +94,37 @@ export default function HomePage() {
     };
 
     loadData();
-  }, [userData?.id, userData?.app_id]);
+  }, [userData?.id, userRole]);
 
-  const handleRoleSwitch = () => {
-    setUserRole(prev => prev === 'worker' ? 'employer' : 'worker');
+  const handleRoleSwitch = async () => {
+    if (!userData?.id || isRoleSwitching) return;
+
+    setIsRoleSwitching(true);
+    const newRole = userRole === 'worker' ? 'employer' : 'worker';
+
+    try {
+      console.log(`🔄 Switching user role from ${userRole} to ${newRole}...`);
+
+      const result = await updateUser(userData.id, {
+        user_role: newRole,
+      });
+
+      if (result) {
+        console.log(`✅ User role updated to ${newRole}:`, result.user_role);
+        setUserRole(newRole);
+
+        // Clear employer tasks if switching to worker
+        if (newRole === 'worker') {
+          setEmployerTasks([]);
+        }
+      } else {
+        console.error('Failed to update user role');
+      }
+    } catch (error) {
+      console.error('Error switching role:', error);
+    } finally {
+      setIsRoleSwitching(false);
+    }
   };
 
   const handleAcceptTask = (task: DatabaseTask) => {
@@ -294,9 +341,20 @@ export default function HomePage() {
                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
                   Get work done by verified Pioneers. Pay only for completed tasks with Pi coins.
                 </p>
-                <Button className="rounded-full bg-primary hover:bg-primary/90 px-8">
-                  Create New Task
-                </Button>
+                {userData?.id && userData.username && (
+                  <CreateTaskModal
+                    employerId={userData.id}
+                    employerUsername={userData.username}
+                    onTaskCreated={() => {
+                      // Reload employer tasks
+                      const loadTasks = async () => {
+                        const userEmployerTasks = await getTasksByEmployer(userData.id);
+                        setEmployerTasks(userEmployerTasks);
+                      };
+                      loadTasks();
+                    }}
+                  />
+                )}
               </div>
             )}
           </div>
