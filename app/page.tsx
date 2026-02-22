@@ -10,7 +10,7 @@ import { EmployerDashboard } from '@/components/employer-dashboard';
 import { CreateTaskModal } from '@/components/create-task-modal';
 import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
-import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById } from '@/lib/database';
+import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById, updateTask } from '@/lib/database';
 import { mockUserStats } from '@/lib/mock-data';
 import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry } from '@/lib/types';
 import { 
@@ -61,7 +61,16 @@ export default function HomePage() {
         
         // Fetch real tasks from Supabase
         const tasksData = await getAllTasks();
-        setTasks(tasksData);
+        
+        // Filter out user's own tasks when in worker mode
+        // (a user shouldn't accept their own tasks)
+        let availableTasks = tasksData;
+        if (userRole === 'worker' && userData?.id) {
+          availableTasks = tasksData.filter(task => task.employer_id !== userData.id);
+          console.log(`📋 Filtered tasks: ${tasksData.length} total, ${availableTasks.length} available for worker (excluded ${tasksData.length - availableTasks.length} own tasks)`);
+        }
+        
+        setTasks(availableTasks);
         
         // Fetch real leaderboard from Supabase
         const leaderboardData = await getLeaderboard(10);
@@ -141,7 +150,10 @@ export default function HomePage() {
 
       const workerId = userData.id;
       
-      await submitTask({
+      console.log(`📝 Submitting task proof for task: ${taskId}`);
+      
+      // 1. Create the submission record
+      const submission = await submitTask({
         task_id: taskId,
         worker_id: workerId,
         proof_content: proof,
@@ -153,10 +165,30 @@ export default function HomePage() {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
+
+      if (!submission) {
+        throw new Error('Failed to save submission');
+      }
+
+      console.log(`✅ Task submitted successfully with ID: ${submission.id}`);
       
-      // Refresh tasks after submission
-      const tasksData = await getAllTasks();
-      setTasks(tasksData);
+      // 2. Decrement the slots_remaining for this task
+      const currentTask = tasks.find(t => t.id === taskId);
+      if (currentTask) {
+        const newSlotsRemaining = Math.max(0, currentTask.slots_remaining - 1);
+        await updateTask(taskId, {
+          slots_remaining: newSlotsRemaining,
+        });
+        console.log(`📉 Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
+      }
+      
+      // 3. Refresh tasks after submission
+      const updatedTasks = await getAllTasks();
+      const availableTasks = userRole === 'worker' && userData?.id 
+        ? updatedTasks.filter(t => t.employer_id !== userData.id)
+        : updatedTasks;
+      setTasks(availableTasks);
+      
     } catch (error) {
       console.error('Error submitting task:', error);
       throw error;
