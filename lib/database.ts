@@ -1404,3 +1404,149 @@ export function subscribeToNotifications(
 
   return subscription;
 }
+
+// ============ LEADERBOARD ============
+
+export async function getTopEarners(limit: number = 10) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, pi_username, level, total_earnings, total_tasks_completed')
+    .order('total_earnings', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching top earners:', error);
+    return [];
+  }
+
+  return (data || []).map((user, index) => ({
+    rank: index + 1,
+    id: user.id,
+    pi_username: user.pi_username,
+    level: user.level,
+    total_earnings: user.total_earnings,
+    total_tasks_completed: user.total_tasks_completed,
+  }));
+}
+
+export async function getTopEmployers(limit: number = 10) {
+  try {
+    // Fetch all users
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('id, pi_username, level');
+
+    if (usersError || !users) {
+      console.error('Error fetching users:', usersError);
+      return [];
+    }
+
+    // Fetch all tasks and aggregate by employer
+    const { data: tasks, error: tasksError } = await supabase
+      .from('tasks')
+      .select('employer_id, pi_reward, slots_available');
+
+    if (tasksError || !tasks) {
+      console.error('Error fetching tasks:', tasksError);
+      return [];
+    }
+
+    // Aggregate tasks by employer
+    const employerStats: Record<string, { tasks_posted: number; total_pi_spent: number }> = {};
+
+    tasks.forEach((task: any) => {
+      if (!employerStats[task.employer_id]) {
+        employerStats[task.employer_id] = { tasks_posted: 0, total_pi_spent: 0 };
+      }
+      employerStats[task.employer_id].tasks_posted += 1;
+      employerStats[task.employer_id].total_pi_spent += (task.pi_reward || 0) * (task.slots_available || 1);
+    });
+
+    // Combine user data with employer stats and sort
+    const employers = users
+      .map((user: any) => ({
+        id: user.id,
+        pi_username: user.pi_username,
+        level: user.level,
+        tasks_posted: employerStats[user.id]?.tasks_posted || 0,
+        total_pi_spent: employerStats[user.id]?.total_pi_spent || 0,
+      }))
+      .filter((emp: any) => emp.tasks_posted > 0) // Only show users who posted tasks
+      .sort((a: any, b: any) => b.total_pi_spent - a.total_pi_spent)
+      .slice(0, limit);
+
+    return employers.map((emp: any, index: number) => ({
+      rank: index + 1,
+      ...emp,
+    }));
+  } catch (error) {
+    console.error('Error in getTopEmployers:', error);
+    return [];
+  }
+}
+
+export async function getRisingStars(limit: number = 10) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, pi_username, level, total_earnings, total_tasks_completed, created_at')
+    .gt('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) // Last 30 days
+    .gt('total_earnings', 0)
+    .order('total_earnings', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching rising stars:', error);
+    return [];
+  }
+
+  return (data || []).map((user, index) => {
+    const createdDate = new Date(user.created_at);
+    const daysAsMember = Math.floor(
+      (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    return {
+      rank: index + 1,
+      id: user.id,
+      pi_username: user.pi_username,
+      level: user.level,
+      total_earnings: user.total_earnings,
+      total_tasks_completed: user.total_tasks_completed,
+      created_at: user.created_at,
+      days_as_member: daysAsMember,
+    };
+  });
+}
+
+export async function getUserLeaderboardPosition(
+  userId: string,
+  leaderboardType: 'earners' | 'employers' = 'earners'
+) {
+  if (leaderboardType === 'earners') {
+    const { data, error } = await supabase
+      .from('users')
+      .select('total_earnings')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+
+    const { count } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .gt('total_earnings', data.total_earnings);
+
+    if (count === null) {
+      return null;
+    }
+
+    return {
+      rank: count + 1,
+      earnings: data.total_earnings,
+    };
+  }
+
+  return null;
+}

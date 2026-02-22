@@ -168,3 +168,43 @@ export interface LeaderboardEntry {
   earnings: number;
   tasksCompleted: number;
 }
+
+export interface TopEarner {
+  rank: number;
+  id: string;
+  pi_username: string;
+  level: string;
+  total_earnings: number;
+  total_tasks_completed: number;
+}
+
+export interface TopEmployer {
+  rank: number;
+  id: string;
+  pi_username: string;
+  level: string;
+  tasks_posted: number;
+  total_pi_spent: number;
+}
+
+export interface RisingStar {
+  rank: number;
+  id: string;
+  pi_username: string;
+  level: string;
+  total_earnings: number;
+  total_tasks_completed: number;
+  created_at: string;
+  days_as_member: number;
+}
+
+export interface LeaderboardData {
+  lastUpdated: string;
+  topEarners: TopEarner[];
+  topEmployers: TopEmployer[];
+  risingStars: RisingStar[];
+  userPosition?: {
+    rank: number;
+    earnings: number;
+  } | null;
+}
