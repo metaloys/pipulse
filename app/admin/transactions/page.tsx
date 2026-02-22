@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Download, Filter, Search } from 'lucide-react';
+import { ArrowLeft, Download, Filter, Search, Eye, RefreshCw } from 'lucide-react';
 
 interface Transaction {
   id: string;
@@ -27,6 +27,13 @@ export default function TransactionsPage() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [sortBy, setSortBy] = useState('date-desc');
 
   // Check authentication
   useEffect(() => {
@@ -64,6 +71,27 @@ export default function TransactionsPage() {
       filtered = filtered.filter(t => t.transaction_status === statusFilter);
     }
 
+    // Apply date range filter
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      filtered = filtered.filter(t => new Date(t.created_at) >= fromDate);
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(t => new Date(t.created_at) <= toDate);
+    }
+
+    // Apply amount range filter
+    if (minAmount) {
+      const min = parseFloat(minAmount);
+      filtered = filtered.filter(t => t.amount >= min);
+    }
+    if (maxAmount) {
+      const max = parseFloat(maxAmount);
+      filtered = filtered.filter(t => t.amount <= max);
+    }
+
     // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -77,8 +105,27 @@ export default function TransactionsPage() {
       );
     }
 
+    // Apply sorting
+    switch (sortBy) {
+      case 'date-asc':
+        filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        break;
+      case 'amount-desc':
+        filtered.sort((a, b) => b.amount - a.amount);
+        break;
+      case 'amount-asc':
+        filtered.sort((a, b) => a.amount - b.amount);
+        break;
+      case 'fee-desc':
+        filtered.sort((a, b) => b.pipulse_fee - a.pipulse_fee);
+        break;
+      case 'date-desc':
+      default:
+        filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+
     setFilteredTransactions(filtered);
-  }, [transactions, searchQuery, statusFilter]);
+  }, [transactions, searchQuery, statusFilter, dateFrom, dateTo, minAmount, maxAmount, sortBy]);
 
   const handleExportCSV = () => {
     if (filteredTransactions.length === 0) return;
@@ -127,9 +174,12 @@ export default function TransactionsPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filters and Search */}
+        {/* Advanced Filters */}
         <Card className="bg-slate-800/50 border-slate-700 mb-6 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <h3 className="text-lg font-bold text-white mb-4">Filters & Search</h3>
+          
+          {/* Row 1: Search and Status */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             {/* Search */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Search</label>
@@ -137,7 +187,7 @@ export default function TransactionsPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <Input
                   type="text"
-                  placeholder="Search by ID, sender, receiver..."
+                  placeholder="ID, user, wallet..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder-gray-400"
@@ -160,6 +210,22 @@ export default function TransactionsPage() {
               </select>
             </div>
 
+            {/* Sort By */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 text-white rounded-md focus:outline-none focus:border-purple-500"
+              >
+                <option value="date-desc">Date (Newest)</option>
+                <option value="date-asc">Date (Oldest)</option>
+                <option value="amount-desc">Amount (High to Low)</option>
+                <option value="amount-asc">Amount (Low to High)</option>
+                <option value="fee-desc">Fee (High to Low)</option>
+              </select>
+            </div>
+
             {/* Export Button */}
             <div className="flex items-end">
               <Button
@@ -171,6 +237,75 @@ export default function TransactionsPage() {
                 Export CSV
               </Button>
             </div>
+          </div>
+
+          {/* Row 2: Date Range and Amount Range */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Date From */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">From Date</label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="bg-slate-700/50 border-slate-600 text-white"
+              />
+            </div>
+
+            {/* Date To */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">To Date</label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="bg-slate-700/50 border-slate-600 text-white"
+              />
+            </div>
+
+            {/* Min Amount */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Min Amount (π)</label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+                className="bg-slate-700/50 border-slate-600 text-white"
+              />
+            </div>
+
+            {/* Max Amount */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Max Amount (π)</label>
+              <Input
+                type="number"
+                placeholder="No limit"
+                value={maxAmount}
+                onChange={(e) => setMaxAmount(e.target.value)}
+                className="bg-slate-700/50 border-slate-600 text-white"
+              />
+            </div>
+          </div>
+
+          {/* Clear Filters Button */}
+          <div className="mt-4 flex justify-end">
+            <Button
+              onClick={() => {
+                setSearchQuery('');
+                setStatusFilter('all');
+                setDateFrom('');
+                setDateTo('');
+                setMinAmount('');
+                setMaxAmount('');
+                setSortBy('date-desc');
+              }}
+              variant="outline"
+              className="border-gray-500/50 text-gray-400 hover:bg-gray-500/10"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Clear Filters
+            </Button>
           </div>
         </Card>
 
@@ -220,6 +355,7 @@ export default function TransactionsPage() {
                     <th className="px-6 py-3 text-right font-semibold text-gray-300">Fee</th>
                     <th className="px-6 py-3 text-left font-semibold text-gray-300">Status</th>
                     <th className="px-6 py-3 text-left font-semibold text-gray-300">Date</th>
+                    <th className="px-6 py-3 text-center font-semibold text-gray-300">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
@@ -254,6 +390,19 @@ export default function TransactionsPage() {
                       <td className="px-6 py-4 text-gray-400 text-xs">
                         {new Date(tx.created_at).toLocaleString()}
                       </td>
+                      <td className="px-6 py-4 text-center">
+                        <Button
+                          onClick={() => {
+                            setSelectedTransaction(tx);
+                            setShowDetails(true);
+                          }}
+                          size="sm"
+                          variant="outline"
+                          className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -266,7 +415,131 @@ export default function TransactionsPage() {
         <div className="mt-4 text-sm text-gray-400">
           Showing {filteredTransactions.length} of {transactions.length} transactions
         </div>
+
+        {/* Transaction Details Modal */}
+        {showDetails && selectedTransaction && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="bg-slate-800 border-slate-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-white">Transaction Details</h3>
+                  <Button
+                    onClick={() => {
+                      setShowDetails(false);
+                      setSelectedTransaction(null);
+                    }}
+                    variant="ghost"
+                    className="text-gray-400 hover:text-white"
+                  >
+                    ✕
+                  </Button>
+                </div>
+
+                {/* Transaction Details Grid */}
+                <div className="space-y-4">
+                  {/* ID */}
+                  <div className="bg-slate-700/30 p-4 rounded-lg">
+                    <p className="text-sm text-gray-400 mb-1">Transaction ID</p>
+                    <p className="text-white font-mono break-all">{selectedTransaction.id}</p>
+                  </div>
+
+                  {/* Sender and Receiver */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">From</p>
+                      <p className="text-white font-semibold">{selectedTransaction.sender_username || 'Unknown'}</p>
+                      <p className="text-xs text-gray-500 font-mono mt-1">{selectedTransaction.sender_id}</p>
+                    </div>
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">To</p>
+                      <p className="text-white font-semibold">{selectedTransaction.receiver_username || 'Unknown'}</p>
+                      <p className="text-xs text-gray-500 font-mono mt-1">{selectedTransaction.receiver_id}</p>
+                    </div>
+                  </div>
+
+                  {/* Amount and Fee */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Amount</p>
+                      <p className="text-2xl font-bold text-white">{selectedTransaction.amount.toFixed(2)} π</p>
+                    </div>
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Fee (Pipulse)</p>
+                      <p className="text-2xl font-bold text-orange-400">{selectedTransaction.pipulse_fee.toFixed(2)} π</p>
+                    </div>
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Total</p>
+                      <p className="text-2xl font-bold text-green-400">
+                        {(selectedTransaction.amount + selectedTransaction.pipulse_fee).toFixed(2)} π
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Status and Timestamp */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-2">Status</p>
+                      <span className={`px-3 py-1 rounded-full text-sm font-semibold inline-block ${
+                        selectedTransaction.transaction_status === 'completed'
+                          ? 'bg-green-500/20 text-green-400'
+                          : selectedTransaction.transaction_status === 'pending'
+                          ? 'bg-yellow-500/20 text-yellow-400'
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {selectedTransaction.transaction_status}
+                      </span>
+                    </div>
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Date</p>
+                      <p className="text-white">{new Date(selectedTransaction.created_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {/* Wallet Address */}
+                  <div className="bg-slate-700/30 p-4 rounded-lg">
+                    <p className="text-sm text-gray-400 mb-1">Sender Wallet Address</p>
+                    <p className="text-white font-mono text-xs break-all">{selectedTransaction.sender_id}</p>
+                  </div>
+
+                  <div className="bg-slate-700/30 p-4 rounded-lg">
+                    <p className="text-sm text-gray-400 mb-1">Receiver Wallet Address</p>
+                    <p className="text-white font-mono text-xs break-all">{selectedTransaction.receiver_id}</p>
+                  </div>
+
+                  {/* Blockchain TX ID if available */}
+                  {selectedTransaction.blockchain_tx_id && (
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Blockchain Transaction ID</p>
+                      <p className="text-white font-mono text-xs break-all">{selectedTransaction.blockchain_tx_id}</p>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  {selectedTransaction.description && (
+                    <div className="bg-slate-700/30 p-4 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-1">Description</p>
+                      <p className="text-white">{selectedTransaction.description}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Close Button */}
+                <Button
+                  onClick={() => {
+                    setShowDetails(false);
+                    setSelectedTransaction(null);
+                  }}
+                  className="w-full mt-6 bg-slate-700 hover:bg-slate-600 text-white"
+                >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
