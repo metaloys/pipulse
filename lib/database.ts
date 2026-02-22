@@ -63,19 +63,21 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
       return existingUser;
     }
 
-    // User doesn't exist, create them using raw insert with id
+    // User doesn't exist, create them
     console.log("📝 Creating new user in database:", username);
     const { data, error } = await supabase
       .from('users')
       .insert([{
         id: userId,
         pi_username: username,
-        balance: 0,
+        pi_wallet_address: '', // Empty for now, can be set later
+        user_role: 'user', // Default role
+        level: 'Newcomer',
+        current_streak: 0,
+        longest_streak: 0,
+        last_active_date: new Date().toISOString(),
         total_earnings: 0,
         total_tasks_completed: 0,
-        current_streak: 0,
-        level: 'Newcomer',
-        verified: true,
       }])
       .select()
       .single();
