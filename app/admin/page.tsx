@@ -314,6 +314,16 @@ function OverviewSection() {
                 ✅ Submissions
               </Button>
             </Link>
+            <Link href="/admin/disputes">
+              <Button variant="outline" className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
+                ⚖️ Disputes
+              </Button>
+            </Link>
+            <Link href="/admin/analytics">
+              <Button variant="outline" className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
+                📈 Analytics
+              </Button>
+            </Link>
           </div>
         </div>
       </Card>
