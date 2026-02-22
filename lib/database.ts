@@ -49,29 +49,26 @@ export async function createUser(user: Omit<DatabaseUser, 'id' | 'created_at' | 
  * Create or update user on first authentication with Pi Network
  * This is called right after a user authenticates to ensure they exist in Supabase
  * 
+ * CRITICAL: Always check by username first, since username is the unique identifier
+ * The userId from Pi SDK might be different on repeat logins
+ * 
  * @param userId - Pi Network user ID (uid)
- * @param username - Pi Network username
+ * @param username - Pi Network username (unique identifier)
  * @returns The created or updated user record
  */
 export async function createOrUpdateUserOnAuth(userId: string, username: string) {
   try {
-    // First check if user exists by ID
-    let existingUser = await getUserById(userId);
+    // ALWAYS check by username first - this is the source of truth
+    console.log(`🔍 Checking for existing user by username: ${username}`);
+    let existingUser = await getUserByUsername(username);
     
     if (existingUser) {
-      console.log("✅ User already exists in database:", username);
+      console.log(`✅ User already exists in database: ${username} (ID: ${existingUser.id})`);
       return existingUser;
     }
 
-    // Also check by username in case ID changed (shouldn't happen, but be safe)
-    existingUser = await getUserByUsername(username);
-    if (existingUser) {
-      console.log("✅ User found by username:", username, "- Using existing ID:", existingUser.id);
-      return existingUser;
-    }
-
-    // User doesn't exist, create them
-    console.log("📝 Creating new user in database:", username);
+    // Username not found, so user is truly new - create them
+    console.log(`📝 Creating new user in database: ${username}`);
     const { data, error } = await supabase
       .from('users')
       .insert([{
@@ -90,27 +87,27 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
       .maybeSingle();
 
     if (error) {
-      // If it's a 409 (duplicate), try to fetch the existing user by username
-      if (error.code === 'PGRST109' || error.status === 409) {
-        console.warn("⚠️ User likely already exists (409). Fetching by username:", username);
-        const byUsername = await getUserByUsername(username);
-        if (byUsername) {
-          console.log("✅ Found existing user by username:", username);
-          return byUsername;
+      console.error(`❌ Failed to create user ${username}:`, error);
+      // If 409, user was just created by another request, fetch it
+      if (error.status === 409) {
+        console.warn(`⚠️ 409 conflict detected - user likely exists now. Fetching...`);
+        const retryFetch = await getUserByUsername(username);
+        if (retryFetch) {
+          console.log(`✅ Successfully fetched user after 409: ${username}`);
+          return retryFetch;
         }
       }
-      console.error("❌ Failed to create user:", username, error);
       return null;
     }
 
     if (data) {
-      console.log("✅ User created successfully:", username);
+      console.log(`✅ User created successfully: ${username}`);
       return data as DatabaseUser;
     }
 
     return null;
   } catch (error) {
-    console.error("Error in createOrUpdateUserOnAuth:", error);
+    console.error(`❌ Error in createOrUpdateUserOnAuth for ${username}:`, error);
     return null;
   }
 }
@@ -128,6 +125,36 @@ export async function updateUser(userId: string, updates: Partial<DatabaseUser>)
     return null;
   }
   return data as DatabaseUser;
+}
+
+/**
+ * Switch user role between 'worker' and 'employer'
+ * Uses direct UPDATE to avoid query issues
+ */
+export async function switchUserRole(userId: string, newRole: 'worker' | 'employer') {
+  console.log(`🔄 Switching role for user ${userId} to ${newRole}...`);
+  
+  const { data, error } = await supabase
+    .from('users')
+    .update({ 
+      user_role: newRole,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', userId)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error(`❌ Error switching role for ${userId}:`, error);
+    return null;
+  }
+
+  if (data) {
+    console.log(`✅ Role switched successfully to ${newRole}:`, data.user_role);
+    return data as DatabaseUser;
+  }
+
+  return null;
 }
 
 // ============ TASKS ============

@@ -1,52 +1,64 @@
--- Fix RLS Policies for task_submissions table
--- The 401 error indicates RLS is blocking task submission inserts
--- We need to relax the policies to allow API access with backend validation
+-- Comprehensive RLS Policy Fix for task_submissions table
+-- This table was blocking inserts with 401 Unauthorized
 
--- Disable RLS temporarily to fix policies
+-- Step 1: Disable RLS temporarily to modify policies
 ALTER TABLE task_submissions DISABLE ROW LEVEL SECURITY;
 
--- Drop old restrictive policies if they exist
+-- Step 2: Drop ALL existing policies on task_submissions
 DROP POLICY IF EXISTS "Allow public read" ON task_submissions;
 DROP POLICY IF EXISTS "Allow public insert" ON task_submissions;
 DROP POLICY IF EXISTS "Allow public update" ON task_submissions;
+DROP POLICY IF EXISTS "Allow public delete" ON task_submissions;
 DROP POLICY IF EXISTS "task_submissions_insert_policy" ON task_submissions;
 DROP POLICY IF EXISTS "task_submissions_select_policy" ON task_submissions;
 DROP POLICY IF EXISTS "task_submissions_update_policy" ON task_submissions;
+DROP POLICY IF EXISTS "task_submissions_delete_policy" ON task_submissions;
+DROP POLICY IF EXISTS "Allow all reads on task_submissions" ON task_submissions;
+DROP POLICY IF EXISTS "Allow all inserts on task_submissions" ON task_submissions;
+DROP POLICY IF EXISTS "Allow all updates on task_submissions" ON task_submissions;
+DROP POLICY IF EXISTS "Allow all deletes on task_submissions" ON task_submissions;
+DROP POLICY IF EXISTS "Allow insert submissions" ON task_submissions;
+DROP POLICY IF EXISTS "Allow read submissions" ON task_submissions;
+DROP POLICY IF EXISTS "Allow update submissions" ON task_submissions;
 
--- Re-enable RLS
+-- Step 3: Re-enable RLS
 ALTER TABLE task_submissions ENABLE ROW LEVEL SECURITY;
 
--- Create new permissive policies that allow all API access
--- Backend validation will enforce business logic
-
--- Allow SELECT on all submissions
-CREATE POLICY "Allow all reads on task_submissions"
-  ON task_submissions
-  FOR SELECT
-  TO anon, authenticated
+-- Step 4: Create new permissive policies
+-- SELECT - Allow reading all submissions (employer views submissions, leaderboards, etc)
+CREATE POLICY "task_submissions_select" 
+  ON task_submissions 
+  FOR SELECT 
+  TO anon, authenticated 
   USING (true);
 
--- Allow INSERT for all users (backend validates worker_id and task_id)
-CREATE POLICY "Allow all inserts on task_submissions"
-  ON task_submissions
-  FOR INSERT
-  TO anon, authenticated
+-- INSERT - Allow creating submissions (workers submit proofs)
+CREATE POLICY "task_submissions_insert" 
+  ON task_submissions 
+  FOR INSERT 
+  TO anon, authenticated 
   WITH CHECK (true);
 
--- Allow UPDATE for all users (backend validates submission ownership)
-CREATE POLICY "Allow all updates on task_submissions"
-  ON task_submissions
-  FOR UPDATE
-  TO anon, authenticated
-  USING (true)
+-- UPDATE - Allow updating submissions (approve/reject, status changes)
+CREATE POLICY "task_submissions_update" 
+  ON task_submissions 
+  FOR UPDATE 
+  TO anon, authenticated 
+  USING (true) 
   WITH CHECK (true);
 
--- Allow DELETE for all users (backend validates submission ownership)
-CREATE POLICY "Allow all deletes on task_submissions"
-  ON task_submissions
-  FOR DELETE
-  TO anon, authenticated
+-- DELETE - Allow deleting submissions (worker cancels pending submission)
+CREATE POLICY "task_submissions_delete" 
+  ON task_submissions 
+  FOR DELETE 
+  TO anon, authenticated 
   USING (true);
 
--- Verify policies are in place
-SELECT schemaname, tablename, policyname FROM pg_policies WHERE tablename = 'task_submissions' ORDER BY policyname;
+-- Step 5: Verify policies are in place
+SELECT 
+  policyname,
+  permissive,
+  qual as condition
+FROM pg_policies 
+WHERE tablename = 'task_submissions' 
+ORDER BY policyname;

@@ -10,7 +10,7 @@ import { EmployerDashboard } from '@/components/employer-dashboard';
 import { CreateTaskModal } from '@/components/create-task-modal';
 import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
-import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById, updateTask } from '@/lib/database';
+import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById, updateTask, switchUserRole } from '@/lib/database';
 import { mockUserStats } from '@/lib/mock-data';
 import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry } from '@/lib/types';
 import { 
@@ -114,9 +114,7 @@ export default function HomePage() {
     try {
       console.log(`🔄 Switching user role from ${userRole} to ${newRole}...`);
 
-      const result = await updateUser(userData.id, {
-        user_role: newRole,
-      });
+      const result = await switchUserRole(userData.id, newRole);
 
       if (result) {
         console.log(`✅ User role updated to ${newRole}:`, result.user_role);
