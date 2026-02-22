@@ -47,10 +47,15 @@ export async function createUser(user: Omit<DatabaseUser, 'id' | 'created_at' | 
 
 /**
  * Create or update user on first authentication with Pi Network
- * This is called right after a user authenticates to ensure they exist in Supabase
+ * CRITICAL FIX: Proper duplicate handling with unique constraint on pi_wallet_address
  * 
- * CRITICAL: Always check by username first, since username is the unique identifier
- * The userId from Pi SDK might be different on repeat logins
+ * Flow:
+ * 1. Check if user exists by id
+ * 2. If found return immediately
+ * 3. If not found, check by pi_username
+ * 4. If found by username, return existing user
+ * 5. Only insert if truly not found by BOTH id and username
+ * 6. NEVER send pi_wallet_address in insert - set to null or omit
  * 
  * @param userId - Pi Network user ID (uid)
  * @param username - Pi Network username (unique identifier)
@@ -58,23 +63,32 @@ export async function createUser(user: Omit<DatabaseUser, 'id' | 'created_at' | 
  */
 export async function createOrUpdateUserOnAuth(userId: string, username: string) {
   try {
-    // ALWAYS check by username first - this is the source of truth
-    console.log(`🔍 Checking for existing user by username: ${username}`);
-    let existingUser = await getUserByUsername(username);
+    // STEP 1: Check by ID first
+    console.log(`🔍 Step 1: Checking if user exists by ID: ${userId}`);
+    let existingUser = await getUserById(userId);
     
     if (existingUser) {
-      console.log(`✅ User already exists in database: ${username} (ID: ${existingUser.id})`);
+      console.log(`✅ User found by ID: ${username} (ID: ${existingUser.id})`);
       return existingUser;
     }
 
-    // Username not found, so user is truly new - create them
-    console.log(`📝 Creating new user in database: ${username}`);
+    // STEP 2: Check by username
+    console.log(`🔍 Step 2: Checking if user exists by username: ${username}`);
+    existingUser = await getUserByUsername(username);
+    
+    if (existingUser) {
+      console.log(`✅ User found by username: ${username} (ID: ${existingUser.id})`);
+      return existingUser;
+    }
+
+    // STEP 3: User truly doesn't exist - create them
+    console.log(`📝 Step 3: Creating new user: ${username}`);
     const { data, error } = await supabase
       .from('users')
       .insert([{
         id: userId,
         pi_username: username,
-        pi_wallet_address: '', // Empty for now, can be set later
+        pi_wallet_address: null, // CRITICAL FIX: Don't send empty string, use null
         user_role: 'worker', // Default role - users start as workers
         level: 'Newcomer',
         current_streak: 0,
@@ -88,15 +102,22 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
 
     if (error) {
       console.error(`❌ Failed to create user ${username}:`, error);
-      // If 409, user was just created by another request, fetch it
+      
+      // If 409 conflict, try to fetch again - might have been created by concurrent request
       if (error.status === 409) {
-        console.warn(`⚠️ 409 conflict detected - user likely exists now. Fetching...`);
-        const retryFetch = await getUserByUsername(username);
-        if (retryFetch) {
-          console.log(`✅ Successfully fetched user after 409: ${username}`);
-          return retryFetch;
+        console.warn(`⚠️ 409 conflict - attempting recovery by fetching user...`);
+        const byId = await getUserById(userId);
+        if (byId) {
+          console.log(`✅ Recovered user by ID after 409: ${username}`);
+          return byId;
+        }
+        const byUsername = await getUserByUsername(username);
+        if (byUsername) {
+          console.log(`✅ Recovered user by username after 409: ${username}`);
+          return byUsername;
         }
       }
+      
       return null;
     }
 
