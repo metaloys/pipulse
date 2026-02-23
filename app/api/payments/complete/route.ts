@@ -260,7 +260,7 @@ export async function POST(request: NextRequest) {
           const { error: submissionError } = await supabaseAdmin
             .from('task_submissions')
             .update({
-              status: 'completed',
+              submission_status: 'approved',
               reviewed_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             })
@@ -271,7 +271,7 @@ export async function POST(request: NextRequest) {
             throw new Error(`Failed to update submission: ${submissionError.message}`);
           }
 
-          console.log(`✅ [STEP 4] Submission status updated to 'completed'`);
+          console.log(`✅ [STEP 4] Submission status updated to 'approved'`);
         })();
         dbUpdates.push(submissionUpdatePromise);
 

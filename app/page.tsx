@@ -179,7 +179,7 @@ export default function HomePage() {
         worker_id: workerId,
         proof_content: proof,
         submission_type: submissionType,
-        submission_status: 'pending',
+        submission_status: 'submitted',
         rejection_reason: null,
         submitted_at: new Date().toISOString(),
         reviewed_at: null,
