@@ -70,6 +70,7 @@ export interface DatabaseTaskSubmission {
   revision_requested_at: string | null;
   resubmitted_at: string | null;
   employer_notes: string | null;
+  agreed_reward: number; // Price worker agreed to at time of submission
   submitted_at: string;
   reviewed_at: string | null;
   created_at: string;

@@ -38,8 +38,15 @@ export function TaskCard({ task, onAccept }: TaskCardProps) {
   const piReward = 'piReward' in task ? task.piReward : task.pi_reward;
   const timeEstimate = 'timeEstimate' in task ? task.timeEstimate : task.time_estimate;
   const employerName = 'employerName' in task ? task.employerName : 'Unknown Employer';
+  const createdAt = 'createdAt' in task ? task.createdAt : task.created_at;
+  const updatedAt = 'updatedAt' in task ? task.updatedAt : task.updated_at;
   
   const slotsPercentage = ((slots - slotsRemaining) / slots) * 100;
+
+  // Check if task was recently updated (updated_at > created_at)
+  const wasUpdated = updatedAt && createdAt && new Date(updatedAt) > new Date(createdAt);
+  const updateHoursAgo = wasUpdated ? Math.floor((Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60)) : 0;
+  const showUpdateBadge = wasUpdated && updateHoursAgo < 24; // Show badge if updated within last 24 hours
 
   return (
     <Card className="glassmorphism p-5 border-white/10 hover:border-primary/50 transition-all duration-300">
@@ -73,6 +80,11 @@ export function TaskCard({ task, onAccept }: TaskCardProps) {
           <Users className="w-3 h-3 mr-1" />
           {slotsRemaining}/{slots} slots
         </Badge>
+        {showUpdateBadge && (
+          <Badge variant="outline" className="text-xs border-amber-500/50 bg-amber-500/10 text-amber-600">
+            Updated {updateHoursAgo === 0 ? 'now' : `${updateHoursAgo}h ago`}
+          </Badge>
+        )}
       </div>
 
       <div className="mb-4">

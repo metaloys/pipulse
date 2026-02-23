@@ -195,9 +195,32 @@ export async function POST(request: NextRequest) {
     }
 
     // ========================================================================
+    // CRITICAL FIX: Fetch agreed_reward from submission for price protection
+    // Use agreed_reward (worker's agreed price) instead of current task reward
+    // ========================================================================
+    let agreedReward = paymentDetailsAmount; // Fallback to metadata amount
+    if (submissionId) {
+      console.log(`\n🔒 [PRICE PROTECTION] Fetching agreed_reward from submission: ${submissionId}`);
+      const { data: submissionData, error: submissionError } = await supabaseAdmin
+        .from('task_submissions')
+        .select('agreed_reward')
+        .eq('id', submissionId)
+        .maybeSingle();
+
+      if (submissionError) {
+        console.warn(`⚠️ Failed to fetch submission agreed_reward:`, submissionError);
+      } else if (submissionData && submissionData.agreed_reward) {
+        agreedReward = submissionData.agreed_reward;
+        console.log(`✅ Using protected agreed_reward: ${agreedReward}π (original metadata: ${paymentDetailsAmount}π)`);
+      } else {
+        console.warn(`⚠️ No agreed_reward found in submission, using metadata amount: ${paymentDetailsAmount}π`);
+      }
+    }
+
+    // ========================================================================
     // Database updates - ATOMIC with error recovery logging
     // ========================================================================
-    if (workerId && submissionId && paymentDetailsAmount) {
+    if (workerId && submissionId && (agreedReward || paymentDetailsAmount)) {
       try {
         console.log(`\n💾 Starting atomic database updates sequence`);
 
@@ -225,7 +248,9 @@ export async function POST(request: NextRequest) {
             throw new Error(`Worker not found: ${workerId}`);
           }
 
-          const newTotalEarnings = (userData.total_earnings || 0) + paymentDetailsAmount;
+          // Use agreedReward (price protection) instead of current paymentDetailsAmount
+          const paymentAmount = agreedReward || paymentDetailsAmount;
+          const newTotalEarnings = (userData.total_earnings || 0) + paymentAmount;
           const newTasksCompleted = (userData.total_tasks_completed || 0) + 1;
 
           const { data: updatedUser, error: updateError } = await supabaseAdmin
@@ -291,7 +316,7 @@ export async function POST(request: NextRequest) {
               task_id: taskId,
               sender_id: employerId, // FIXED: Use employer's UUID from users table
               receiver_id: workerId, // FIXED: Use worker's UUID from users table
-              amount: paymentDetailsAmount,
+              amount: agreedReward || paymentDetailsAmount, // Use agreed_reward (price protection)
               pipulse_fee: pipulseFee,
               pi_blockchain_txid: txid, // FIXED: Store blockchain tx ID here, not as sender_id
               transaction_type: 'payment',

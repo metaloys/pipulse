@@ -181,6 +181,21 @@ export function TaskManagement({
         return;
       }
 
+      // PRICE PROTECTION WARNING: Check if price changed on task with submissions
+      if (formData.pi_reward !== editingTask.pi_reward) {
+        const { getTaskSubmissions } = await import('@/lib/database');
+        const submissions = await getTaskSubmissions(editingTask.id);
+        const hasActiveSubmissions = submissions && submissions.length > 0;
+        
+        if (hasActiveSubmissions) {
+          const priceChange = formData.pi_reward - editingTask.pi_reward;
+          const direction = priceChange > 0 ? 'increased' : 'decreased';
+          console.warn(`⚠️ PRICE CHANGED: Task reward ${direction} from ${editingTask.pi_reward}π to ${formData.pi_reward}π while ${submissions.length} submission(s) exist`);
+          console.warn(`   Workers who already submitted will be paid their agreed_reward: ${editingTask.pi_reward}π (protected)`);
+          // Don't block the update, just warn - employer may have legitimate reasons
+        }
+      }
+
       setIsSubmitting(true);
       setError(null);
 

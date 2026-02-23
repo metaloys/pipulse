@@ -173,7 +173,13 @@ export default function HomePage() {
       
       console.log(`📝 Submitting task proof for task: ${taskId}`);
       
-      // 1. Create the submission record
+      // Get the current task to capture agreed_reward at submission time
+      const currentTask = tasks.find(t => t.id === taskId);
+      if (!currentTask) {
+        throw new Error('Task not found');
+      }
+      
+      // 1. Create the submission record with agreed_reward for price protection
       const submission = await submitTask({
         task_id: taskId,
         worker_id: workerId,
@@ -181,6 +187,7 @@ export default function HomePage() {
         submission_type: submissionType,
         submission_status: 'submitted',
         rejection_reason: null,
+        agreed_reward: currentTask.pi_reward, // Store the price worker agreed to
         submitted_at: new Date().toISOString(),
         reviewed_at: null,
         created_at: new Date().toISOString(),
@@ -194,14 +201,11 @@ export default function HomePage() {
       console.log(`✅ Task submitted successfully with ID: ${submission.id}`);
       
       // 2. Decrement the slots_remaining for this task
-      const currentTask = tasks.find(t => t.id === taskId);
-      if (currentTask) {
-        const newSlotsRemaining = Math.max(0, currentTask.slots_remaining - 1);
-        await updateTask(taskId, {
-          slots_remaining: newSlotsRemaining,
-        });
-        console.log(`📉 Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
-      }
+      const newSlotsRemaining = Math.max(0, currentTask.slots_remaining - 1);
+      await updateTask(taskId, {
+        slots_remaining: newSlotsRemaining,
+      });
+      console.log(`📉 Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
       
       // 3. Refresh tasks after submission
       const updatedTasks = await getAllTasks();
