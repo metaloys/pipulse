@@ -19,15 +19,23 @@ function getSupabaseClient() {
   }
 
   // Server-side context: Use service role key (bypasses RLS)
+  // Note: During build, use anon key as fallback to prevent build failures
   if (typeof window === 'undefined') {
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseServiceKey) {
-      throw new Error(
-        'Missing SUPABASE_SERVICE_ROLE_KEY environment variable for server-side operations'
-      );
+    
+    // If service key is available, use it (runtime)
+    if (supabaseServiceKey) {
+      console.log('🔐 Using server-side Supabase client (service role key)');
+      return createClient(supabaseUrl, supabaseServiceKey);
     }
-    console.log('🔐 Using server-side Supabase client (service role key)');
-    return createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Fallback to anon key during build or when service key unavailable
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseAnonKey) {
+      throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable');
+    }
+    console.log('⚠️ Service role key unavailable, falling back to anon key');
+    return createClient(supabaseUrl, supabaseAnonKey);
   }
 
   // Client-side context: Use anon key (RLS enforced)
