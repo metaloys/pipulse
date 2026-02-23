@@ -64,8 +64,11 @@ export async function GET(request: NextRequest) {
       throw transactionError;
     }
 
-    const totalCommission = (transactionData || []).reduce((sum: number, t: any) => sum + (t.pipulse_fee || 0), 0);
-    console.log('✅ [ADMIN STATS] Total commission:', totalCommission);
+    const totalCommission = (transactionData || []).reduce((sum: number, t: any) => {
+      const fee = parseFloat(t.pipulse_fee) || 0;
+      return sum + fee;
+    }, 0);
+    console.log('✅ [ADMIN STATS] Total commission:', totalCommission, 'type:', typeof totalCommission);
 
     // Get daily commission (last 24 hours)
     const oneDayAgo = new Date();
@@ -82,8 +85,11 @@ export async function GET(request: NextRequest) {
       throw dailyError;
     }
 
-    const dailyCommission = (dailyData || []).reduce((sum: number, t: any) => sum + (t.pipulse_fee || 0), 0);
-    console.log('✅ [ADMIN STATS] Daily commission:', dailyCommission);
+    const dailyCommission = (dailyData || []).reduce((sum: number, t: any) => {
+      const fee = parseFloat(t.pipulse_fee) || 0;
+      return sum + fee;
+    }, 0);
+    console.log('✅ [ADMIN STATS] Daily commission:', dailyCommission, 'type:', typeof dailyCommission);
 
     // Get total users count
     console.log('📥 [ADMIN STATS] Counting users...');
@@ -154,8 +160,8 @@ export async function GET(request: NextRequest) {
     console.log('✅ [ADMIN STATS] Active tasks:', activeTasks);
 
     const response = {
-      totalCommission: parseFloat(totalCommission.toFixed(2)),
-      dailyCommission: parseFloat(dailyCommission.toFixed(2)),
+      totalCommission: typeof totalCommission === 'number' ? parseFloat(totalCommission.toFixed(2)) : 0,
+      dailyCommission: typeof dailyCommission === 'number' ? parseFloat(dailyCommission.toFixed(2)) : 0,
       totalUsers: totalUsers || 0,
       totalTasks: totalTasks || 0,
       activeTasks: activeTasks || 0,
