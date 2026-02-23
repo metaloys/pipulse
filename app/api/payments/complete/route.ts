@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 /**
  * POST /api/payments/complete
+ * Version: 1.1.0 - Environment validation on all requests
  * 
  * Server-side payment completion using Pi Network API
  * Complete workflow with all 6 critical steps:
@@ -32,6 +33,20 @@ import { createClient } from '@supabase/supabase-js';
  */
 export async function POST(request: NextRequest) {
   try {
+    // Validate environment variables FIRST
+    const piApiKey = process.env.PI_API_KEY;
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    console.log('🔍 [PAYMENT ENV CHECK] Validating environment variables...');
+    console.log('  PI_API_KEY:', piApiKey ? `✅ SET (${piApiKey.length} chars)` : '❌ MISSING');
+    console.log('  SUPABASE_URL:', supabaseUrl ? `✅ SET (${supabaseUrl.length} chars)` : '❌ MISSING');
+    console.log('  SUPABASE_SERVICE_ROLE_KEY:', supabaseKey ? `✅ SET (${supabaseKey.length} chars)` : '❌ MISSING');
+
+    if (!piApiKey || !supabaseUrl || !supabaseKey) {
+      throw new Error('❌ CRITICAL: Missing required environment variables!');
+    }
+
     // Parse the request body
     const body = await request.json();
     const { paymentId, txid, metadata } = body;

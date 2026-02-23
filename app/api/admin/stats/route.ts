@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Force redeploy: 2026-02-23T12:00:00Z
+/**
+ * API Route: GET /api/admin/stats
+ * Version: 1.2.0 - Environment variable validation enabled
+ * Last updated: 2026-02-23 14:30:00Z
+ * 
+ * This route requires server-side environment variables:
+ * - SUPABASE_URL (server-side only)
+ * - SUPABASE_SERVICE_ROLE_KEY (server-side admin key)
+ */
 function getSupabaseClient() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  console.log('🔍 [ENV CHECK] SUPABASE_URL:', url ? `EXISTS (${url.length} chars)` : 'UNDEFINED');
+  console.log('🔍 [ENV CHECK] SUPABASE_SERVICE_ROLE_KEY:', key ? `EXISTS (${key.length} chars)` : 'UNDEFINED');
 
   if (!url || !key) {
     console.error('❌ Missing Supabase environment variables:', {
