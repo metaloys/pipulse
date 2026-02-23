@@ -1,0 +1,841 @@
+/**
+ * SERVER-SIDE DATABASE FUNCTIONS
+ * 
+ * This file mirrors lib/database.ts but uses server-side Supabase credentials.
+ * 
+ * CRITICAL: This file should ONLY be imported in app/api/ routes (server-side).
+ * Never import this in client components or pages.
+ * 
+ * Uses:
+ * - SUPABASE_URL (no NEXT_PUBLIC prefix)
+ * - SUPABASE_SERVICE_ROLE_KEY (no NEXT_PUBLIC prefix)
+ * 
+ * This allows:
+ * - Bypassing RLS policies (admin operations)
+ * - Accessing protected data
+ * - Performing server-side mutations securely
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import type {
+  DatabaseTask,
+  DatabaseUser,
+  DatabaseTaskSubmission,
+  DatabaseTransaction,
+  DatabaseStreak,
+  DatabaseDispute,
+  DatabaseNotification,
+} from './types';
+
+// ============================================================================
+// INITIALIZATION - SERVER-SIDE CREDENTIALS ONLY
+// ============================================================================
+
+function getServerSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error(
+      'Missing server-side Supabase configuration. ' +
+      'Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in environment variables.'
+    );
+  }
+
+  return createClient(url, key);
+}
+
+// ============================================================================
+// USERS - SERVER-SIDE OPERATIONS
+// ============================================================================
+
+export async function serverGetUserById(userId: string) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching user:', error);
+      return null;
+    }
+    return data as DatabaseUser | null;
+  } catch (error) {
+    console.error('Error in serverGetUserById:', error);
+    return null;
+  }
+}
+
+export async function serverGetUserByUsername(username: string) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('pi_username', username)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching user:', error);
+      return null;
+    }
+    return data as DatabaseUser | null;
+  } catch (error) {
+    console.error('Error in serverGetUserByUsername:', error);
+    return null;
+  }
+}
+
+export async function serverUpdateUser(
+  userId: string,
+  updates: Partial<DatabaseUser>
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('users')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error updating user:', error);
+      return null;
+    }
+    return data as DatabaseUser;
+  } catch (error) {
+    console.error('Error in serverUpdateUser:', error);
+    return null;
+  }
+}
+
+export async function serverUpdateUserEarnings(
+  userId: string,
+  amountEarned: number
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('users')
+      .select('total_earnings')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error('Error fetching user for earnings update:', error);
+      return null;
+    }
+
+    const newEarnings = (data.total_earnings || 0) + amountEarned;
+
+    const { data: updated, error: updateError } = await supabase
+      .from('users')
+      .update({ total_earnings: newEarnings })
+      .eq('id', userId)
+      .select()
+      .maybeSingle();
+
+    if (updateError) {
+      console.error('Error updating user earnings:', updateError);
+      return null;
+    }
+
+    console.log(
+      `✅ User earnings updated: +${amountEarned}π (new total: ${newEarnings}π)`
+    );
+    return updated;
+  } catch (error) {
+    console.error('Error in serverUpdateUserEarnings:', error);
+    return null;
+  }
+}
+
+export async function serverIncrementUserTaskCount(
+  userId: string,
+  count: number = 1
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('users')
+      .select('total_tasks_completed')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error('Error fetching user for task count update:', error);
+      return null;
+    }
+
+    const newCount = (data.total_tasks_completed || 0) + count;
+
+    const { data: updated, error: updateError } = await supabase
+      .from('users')
+      .update({ total_tasks_completed: newCount })
+      .eq('id', userId)
+      .select()
+      .maybeSingle();
+
+    if (updateError) {
+      console.error('Error updating user task count:', updateError);
+      return null;
+    }
+
+    console.log(
+      `✅ User task count updated: +${count} (new total: ${newCount})`
+    );
+    return updated;
+  } catch (error) {
+    console.error('Error in serverIncrementUserTaskCount:', error);
+    return null;
+  }
+}
+
+export async function serverUpdateUserStatsAfterApproval(
+  userId: string,
+  piAmount: number
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('users')
+      .select('total_earnings, total_tasks_completed')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error('Error fetching user for stats update:', error);
+      return null;
+    }
+
+    const updated = {
+      total_earnings: (data.total_earnings || 0) + piAmount,
+      total_tasks_completed: (data.total_tasks_completed || 0) + 1,
+    };
+
+    const { data: result, error: updateError } = await supabase
+      .from('users')
+      .update(updated)
+      .eq('id', userId)
+      .select()
+      .maybeSingle();
+
+    if (updateError) {
+      console.error('Error updating user stats:', updateError);
+      return null;
+    }
+
+    console.log(
+      `✅ Updated user stats: +${piAmount}π earned, +1 task completed`
+    );
+    return result;
+  } catch (error) {
+    console.error('Error in serverUpdateUserStatsAfterApproval:', error);
+    return null;
+  }
+}
+
+// ============================================================================
+// TASKS - SERVER-SIDE OPERATIONS
+// ============================================================================
+
+export async function serverGetAllTasks() {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('task_status', 'available')
+      .gt('slots_remaining', 0)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching tasks:', error);
+      return [];
+    }
+    return data as DatabaseTask[];
+  } catch (error) {
+    console.error('Error in serverGetAllTasks:', error);
+    return [];
+  }
+}
+
+export async function serverGetTaskById(taskId: string) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('id', taskId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching task:', error);
+      return null;
+    }
+    return data as DatabaseTask;
+  } catch (error) {
+    console.error('Error in serverGetTaskById:', error);
+    return null;
+  }
+}
+
+export async function serverUpdateTask(
+  taskId: string,
+  updates: Partial<DatabaseTask>
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', taskId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error updating task:', error);
+      return null;
+    }
+    return data as DatabaseTask;
+  } catch (error) {
+    console.error('Error in serverUpdateTask:', error);
+    return null;
+  }
+}
+
+export async function serverGetTasksByEmployer(employerId: string) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('employer_id', employerId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching employer tasks:', error);
+      return [];
+    }
+    return data as DatabaseTask[];
+  } catch (error) {
+    console.error('Error in serverGetTasksByEmployer:', error);
+    return [];
+  }
+}
+
+// ============================================================================
+// TASK SUBMISSIONS - SERVER-SIDE OPERATIONS
+// ============================================================================
+
+export async function serverGetTaskSubmissions(taskId: string) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('task_submissions')
+      .select('*')
+      .eq('task_id', taskId)
+      .order('submitted_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching task submissions:', error);
+      return [];
+    }
+    return data as DatabaseTaskSubmission[];
+  } catch (error) {
+    console.error('Error in serverGetTaskSubmissions:', error);
+    return [];
+  }
+}
+
+export async function serverGetWorkerSubmissions(workerId: string) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('task_submissions')
+      .select('*')
+      .eq('worker_id', workerId)
+      .order('submitted_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching worker submissions:', error);
+      return [];
+    }
+    return data as DatabaseTaskSubmission[];
+  } catch (error) {
+    console.error('Error in serverGetWorkerSubmissions:', error);
+    return [];
+  }
+}
+
+export async function serverUpdateSubmission(
+  submissionId: string,
+  updates: Partial<DatabaseTaskSubmission>
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('task_submissions')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', submissionId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error updating submission:', error);
+      return null;
+    }
+    return data as DatabaseTaskSubmission;
+  } catch (error) {
+    console.error('Error in serverUpdateSubmission:', error);
+    return null;
+  }
+}
+
+export async function serverCreateSubmission(
+  submission: Omit<DatabaseTaskSubmission, 'id' | 'created_at' | 'updated_at'>
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('task_submissions')
+      .insert([submission])
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error creating submission:', error);
+      return null;
+    }
+    return data as DatabaseTaskSubmission;
+  } catch (error) {
+    console.error('Error in serverCreateSubmission:', error);
+    return null;
+  }
+}
+
+// ============================================================================
+// TRANSACTIONS - SERVER-SIDE OPERATIONS
+// ============================================================================
+
+export async function serverCreateTransaction(
+  transaction: Omit<DatabaseTransaction, 'id' | 'created_at' | 'updated_at'>
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert([transaction])
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error creating transaction:', error);
+      return null;
+    }
+    return data as DatabaseTransaction;
+  } catch (error) {
+    console.error('Error in serverCreateTransaction:', error);
+    return null;
+  }
+}
+
+export async function serverGetUserTransactions(userId: string) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching transactions:', error);
+      return [];
+    }
+    return data as DatabaseTransaction[];
+  } catch (error) {
+    console.error('Error in serverGetUserTransactions:', error);
+    return [];
+  }
+}
+
+export async function serverGetAllTransactions() {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching transactions:', error);
+      return [];
+    }
+    return data as DatabaseTransaction[];
+  } catch (error) {
+    console.error('Error in serverGetAllTransactions:', error);
+    return [];
+  }
+}
+
+export async function serverUpdateTransactionStatus(
+  transactionId: string,
+  status: 'completed' | 'failed' | 'pending'
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('transactions')
+      .update({
+        transaction_status: status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', transactionId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error updating transaction status:', error);
+      return null;
+    }
+    return data as DatabaseTransaction;
+  } catch (error) {
+    console.error('Error in serverUpdateTransactionStatus:', error);
+    return null;
+  }
+}
+
+// ============================================================================
+// DISPUTES - SERVER-SIDE OPERATIONS
+// ============================================================================
+
+export async function serverGetAllDisputes() {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('disputes')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching disputes:', error);
+      return [];
+    }
+    return data as DatabaseDispute[];
+  } catch (error) {
+    console.error('Error in serverGetAllDisputes:', error);
+    return [];
+  }
+}
+
+export async function serverGetPendingDisputes() {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('disputes')
+      .select('*')
+      .eq('dispute_status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching pending disputes:', error);
+      return [];
+    }
+    return data as DatabaseDispute[];
+  } catch (error) {
+    console.error('Error in serverGetPendingDisputes:', error);
+    return [];
+  }
+}
+
+export async function serverResolveDispute(
+  disputeId: string,
+  ruling: 'in_favor_of_worker' | 'in_favor_of_employer',
+  adminNotes: string,
+  adminId: string
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('disputes')
+      .update({
+        dispute_status: 'resolved',
+        admin_ruling: ruling,
+        admin_notes: adminNotes,
+        admin_id: adminId,
+        resolved_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', disputeId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error resolving dispute:', error);
+      return null;
+    }
+    return data as DatabaseDispute;
+  } catch (error) {
+    console.error('Error in serverResolveDispute:', error);
+    return null;
+  }
+}
+
+// ============================================================================
+// NOTIFICATIONS - SERVER-SIDE OPERATIONS
+// ============================================================================
+
+export async function serverCreateNotification(
+  notification: Omit<DatabaseNotification, 'id' | 'created_at' | 'updated_at'>
+) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert([notification])
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error creating notification:', error);
+      return null;
+    }
+    return data as DatabaseNotification;
+  } catch (error) {
+    console.error('Error in serverCreateNotification:', error);
+    return null;
+  }
+}
+
+export async function serverGetUserNotifications(userId: string) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching notifications:', error);
+      return [];
+    }
+    return data as DatabaseNotification[];
+  } catch (error) {
+    console.error('Error in serverGetUserNotifications:', error);
+    return [];
+  }
+}
+
+// ============================================================================
+// ADMIN OPERATIONS - SERVER-SIDE ONLY
+// ============================================================================
+
+export async function serverGetAllUsers() {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching all users:', error);
+      return [];
+    }
+    return data as DatabaseUser[];
+  } catch (error) {
+    console.error('Error in serverGetAllUsers:', error);
+    return [];
+  }
+}
+
+export async function serverGetPlatformStats() {
+  try {
+    const supabase = getServerSupabase();
+
+    // Total users
+    const { count: totalUsers } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true });
+
+    // Total tasks
+    const { count: totalTasks } = await supabase
+      .from('tasks')
+      .select('*', { count: 'exact', head: true });
+
+    // Total transactions
+    const { count: totalTransactions } = await supabase
+      .from('transactions')
+      .select('*', { count: 'exact', head: true });
+
+    // Total commission
+    const { data: transactions } = await supabase
+      .from('transactions')
+      .select('pipulse_fee');
+
+    const totalCommission = (transactions || []).reduce(
+      (sum: number, t: any) => sum + (t.pipulse_fee || 0),
+      0
+    );
+
+    return {
+      totalUsers: totalUsers || 0,
+      totalTasks: totalTasks || 0,
+      totalTransactions: totalTransactions || 0,
+      totalCommission: parseFloat(totalCommission.toFixed(2)),
+    };
+  } catch (error) {
+    console.error('Error in serverGetPlatformStats:', error);
+    return {
+      totalUsers: 0,
+      totalTasks: 0,
+      totalTransactions: 0,
+      totalCommission: 0,
+    };
+  }
+}
+
+export async function serverGetTopEarners(limit: number = 10) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('users')
+      .select(
+        'id, pi_username, level, total_earnings, total_tasks_completed'
+      )
+      .order('total_earnings', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching top earners:', error);
+      return [];
+    }
+
+    return (data || []).map((user, index) => ({
+      rank: index + 1,
+      id: user.id,
+      pi_username: user.pi_username,
+      level: user.level,
+      total_earnings: user.total_earnings,
+      total_tasks_completed: user.total_tasks_completed,
+    }));
+  } catch (error) {
+    console.error('Error in serverGetTopEarners:', error);
+    return [];
+  }
+}
+
+export async function serverGetTopEmployers(limit: number = 10) {
+  try {
+    const supabase = getServerSupabase();
+
+    // Fetch all users
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('id, pi_username, level');
+
+    if (usersError || !users) {
+      console.error('Error fetching users:', usersError);
+      return [];
+    }
+
+    // Fetch all tasks and aggregate by employer
+    const { data: tasks, error: tasksError } = await supabase
+      .from('tasks')
+      .select('employer_id, pi_reward, slots_available');
+
+    if (tasksError || !tasks) {
+      console.error('Error fetching tasks:', tasksError);
+      return [];
+    }
+
+    // Aggregate tasks by employer
+    const employerStats: Record<
+      string,
+      { tasks_posted: number; total_pi_spent: number }
+    > = {};
+
+    tasks.forEach((task: any) => {
+      if (!employerStats[task.employer_id]) {
+        employerStats[task.employer_id] = {
+          tasks_posted: 0,
+          total_pi_spent: 0,
+        };
+      }
+      employerStats[task.employer_id].tasks_posted += 1;
+      employerStats[task.employer_id].total_pi_spent +=
+        (task.pi_reward || 0) * (task.slots_available || 1);
+    });
+
+    // Combine user data with employer stats and sort
+    const employers = users
+      .map((user: any) => ({
+        id: user.id,
+        pi_username: user.pi_username,
+        level: user.level,
+        tasks_posted: employerStats[user.id]?.tasks_posted || 0,
+        total_pi_spent: employerStats[user.id]?.total_pi_spent || 0,
+      }))
+      .filter((emp: any) => emp.tasks_posted > 0) // Only show users who posted tasks
+      .sort((a: any, b: any) => b.total_pi_spent - a.total_pi_spent)
+      .slice(0, limit);
+
+    return employers.map((emp: any, index: number) => ({
+      rank: index + 1,
+      ...emp,
+    }));
+  } catch (error) {
+    console.error('Error in serverGetTopEmployers:', error);
+    return [];
+  }
+}
+
+export async function serverGetRisingStars(limit: number = 10) {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('users')
+      .select(
+        'id, pi_username, level, total_earnings, total_tasks_completed, created_at'
+      )
+      .gt(
+        'created_at',
+        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      ) // Last 30 days
+      .gt('total_earnings', 0)
+      .order('total_earnings', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching rising stars:', error);
+      return [];
+    }
+
+    return (data || []).map((user, index) => {
+      const createdDate = new Date(user.created_at);
+      const daysAsMember = Math.floor(
+        (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      return {
+        rank: index + 1,
+        id: user.id,
+        pi_username: user.pi_username,
+        level: user.level,
+        total_earnings: user.total_earnings,
+        total_tasks_completed: user.total_tasks_completed,
+        created_at: user.created_at,
+        days_as_member: daysAsMember,
+      };
+    });
+  } catch (error) {
+    console.error('Error in serverGetRisingStars:', error);
+    return [];
+  }
+}

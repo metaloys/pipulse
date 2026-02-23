@@ -124,7 +124,6 @@ INSERT INTO public.tasks (
   ('550e8400-e29b-41d4-a716-446655770023'::uuid, 'Data Entry', 'Data entry and classification', 'data-labeling', 9.50, 25, ARRAY['data'], 10, 6, NOW() + INTERVAL '30 days', '550e8400-e29b-41d4-a716-446655550003'::uuid, 'available', 'Accurate entry', NOW() - INTERVAL '80 days', NOW()),
   ('550e8400-e29b-41d4-a716-446655770024'::uuid, 'French Translation', 'Translate French to English', 'translation', 26.00, 14, ARRAY['french'], 2, 1, NOW() + INTERVAL '30 days', '550e8400-e29b-41d4-a716-446655550003'::uuid, 'available', 'Native quality', NOW() - INTERVAL '70 days', NOW())
 ON CONFLICT (id) DO NOTHING;
-ON CONFLICT (id) DO NOTHING;
 
 -- ============ VERIFY DATA ============
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTopEarners, getTopEmployers, getRisingStars, getUserLeaderboardPosition } from '@/lib/database';
+import { serverGetTopEarners, serverGetTopEmployers, serverGetRisingStars } from '@/lib/database-server';
 import type { LeaderboardData } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -20,19 +20,31 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const userId = searchParams.get('userId');
-    const type = (searchParams.get('type') || 'earners') as 'earners' | 'employers';
 
     // Fetch all three leaderboard types in parallel
     const [topEarners, topEmployers, risingStars] = await Promise.all([
-      getTopEarners(10),
-      getTopEmployers(10),
-      getRisingStars(10),
+      serverGetTopEarners(10),
+      serverGetTopEmployers(10),
+      serverGetRisingStars(10),
     ]);
 
-    // Get user's position if userId provided
+    // User position lookup (if user is not in top 10, calculate their rank)
     let userPosition = null;
     if (userId) {
-      userPosition = await getUserLeaderboardPosition(userId, type);
+      try {
+        // Fetch the user's earnings
+        const userFound = (topEarners as any).find(
+          (u: any) => u.id === userId
+        );
+        if (userFound) {
+          userPosition = {
+            rank: userFound.rank,
+            earnings: userFound.total_earnings,
+          };
+        }
+      } catch (posError) {
+        console.error('Error calculating user position:', posError);
+      }
     }
 
     const leaderboardData: LeaderboardData = {
