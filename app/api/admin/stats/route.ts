@@ -61,20 +61,21 @@ export async function GET(request: NextRequest) {
 
     if (completedError) throw completedError;
 
-    // Get daily active users (count distinct workers/senders in last 24 hours)
-    const { data: dailyActiveData, error: dailyActiveError } = await supabase
-      .from('transactions')
-      .select('sender_id, receiver_id')
-      .gte('created_at', oneDayAgo.toISOString());
+    // Get pending submissions count
+    const { count: pendingSubmissions, error: pendingError } = await supabase
+      .from('task_submissions')
+      .select('*', { count: 'exact', head: true })
+      .eq('submission_status', 'submitted');
 
-    if (dailyActiveError) throw dailyActiveError;
+    if (pendingError) throw pendingError;
 
-    const uniqueUsers = new Set<string>();
-    (dailyActiveData || []).forEach((t: any) => {
-      if (t.sender_id) uniqueUsers.add(t.sender_id);
-      if (t.receiver_id) uniqueUsers.add(t.receiver_id);
-    });
-    const dailyActiveUsers = uniqueUsers.size;
+    // Get active tasks count (available or in-progress)
+    const { count: activeTasks, error: activeTasksError } = await supabase
+      .from('tasks')
+      .select('*', { count: 'exact', head: true })
+      .in('task_status', ['available', 'in-progress']);
+
+    if (activeTasksError) throw activeTasksError;
 
     return NextResponse.json(
       {
@@ -82,6 +83,8 @@ export async function GET(request: NextRequest) {
         dailyCommission: parseFloat(dailyCommission.toFixed(2)),
         totalUsers: totalUsers || 0,
         totalTasks: totalTasks || 0,
+        activeTasks: activeTasks || 0,
+        pendingSubmissions: pendingSubmissions || 0,
         completedTransactions: completedTransactions || 0,
         dailyActiveUsers,
       },

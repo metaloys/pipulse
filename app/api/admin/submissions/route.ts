@@ -22,36 +22,23 @@ export async function GET(request: NextRequest) {
         id,
         task_id,
         worker_id,
-        status,
+        submission_status,
+        submission_type,
         proof_content,
-        created_at,
+        submitted_at,
         reviewed_at,
-        reviewer_notes,
-        task:tasks(title),
-        worker:users!task_submissions_worker_id_fkey(pi_username)
+        rejection_reason,
+        employer_notes
       `)
-      .order('created_at', { ascending: false });
+      .order('submitted_at', { ascending: false });
 
     if (error) throw error;
 
-    const mapped = (submissions || []).map((s: any) => ({
-      id: s.id,
-      task_id: s.task_id,
-      task_title: s.task?.title,
-      worker_id: s.worker_id,
-      worker_username: s.worker?.pi_username,
-      status: s.status,
-      proof_content: s.proof_content,
-      created_at: s.created_at,
-      reviewed_at: s.reviewed_at,
-      reviewer_notes: s.reviewer_notes,
-    }));
-
-    return NextResponse.json(mapped, { status: 200 });
+    return NextResponse.json({ data: submissions || [] }, { status: 200 });
   } catch (error) {
     console.error('Submissions fetch error:', error);
     return NextResponse.json(
-      { error: 'Failed to load submissions' },
+      { error: 'Failed to load submissions', data: [] },
       { status: 500 }
     );
   }
