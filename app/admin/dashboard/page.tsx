@@ -22,23 +22,18 @@ import {
   Clock,
   Ban,
   RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
-import {
-  getTodayCommissions,
-  getMonthCommissions,
-  getAllTasks,
-  getTaskSubmissions,
-  getUserById,
-  updateUser,
-  getTransactionsByDateRange,
-} from '@/lib/database';
-import type { DatabaseTransaction, DatabaseTask, DatabaseTaskSubmission } from '@/lib/types';
 
 interface AdminStats {
-  todayCommissions: number;
-  monthCommissions: number;
-  activeTasks: number;
-  pendingSubmissions: number;
+  totalCommission: number;
+  dailyCommission: number;
+  totalTransactions: number;
+  totalVolume: number;
+  activeTasks?: number;
+  totalUsers?: number;
+  totalTasks?: number;
+  pendingSubmissions?: number;
 }
 
 interface BanDialogState {
@@ -47,18 +42,48 @@ interface BanDialogState {
   reason: string;
 }
 
+interface Task {
+  id: string;
+  title: string;
+  description: string;
+  pi_reward: number;
+  slots_remaining: number;
+  slots_available: number;
+  task_status: string;
+  category: string;
+}
+
+interface Submission {
+  id: string;
+  submission_status: string;
+  submission_type: string;
+  submitted_at: string;
+}
+
+interface Transaction {
+  id: string;
+  amount: number;
+  transaction_type: string;
+  transaction_status: string;
+  timestamp: string;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [stats, setStats] = useState<AdminStats>({
-    todayCommissions: 0,
-    monthCommissions: 0,
+    totalCommission: 0,
+    dailyCommission: 0,
+    totalTransactions: 0,
+    totalVolume: 0,
     activeTasks: 0,
+    totalUsers: 0,
+    totalTasks: 0,
     pendingSubmissions: 0,
   });
 
-  const [tasks, setTasks] = useState<DatabaseTask[]>([]);
-  const [transactions, setTransactions] = useState<DatabaseTransaction[]>([]);
-  const [submissions, setSubmissions] = useState<DatabaseTaskSubmission[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [banDialog, setBanDialog] = useState<BanDialogState>({ isOpen: false, username: '', reason: '' });
   const [banError, setBanError] = useState('');
@@ -71,41 +96,43 @@ export default function AdminDashboard() {
     }
   }, [router]);
 
-  // Load dashboard data
+  // Load dashboard data from API endpoints
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
 
-        // Get commissions
-        const todayComm = await getTodayCommissions();
-        const monthComm = await getMonthCommissions();
-
-        // Get tasks
-        const allTasks = await getAllTasks();
-
-        // Get all submissions
-        let allSubmissions: DatabaseTaskSubmission[] = [];
-        for (const task of allTasks) {
-          const taskSubs = await getTaskSubmissions(task.id);
-          allSubmissions = [...allSubmissions, ...taskSubs];
+        // Get stats from API
+        const statsRes = await fetch('/api/admin/stats');
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          console.log('Stats data:', statsData);
+          setStats(statsData);
         }
 
-        // Get transactions for charts
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const transData = await getTransactionsByDateRange(today, new Date());
+        // Get tasks from API
+        const tasksRes = await fetch('/api/admin/tasks');
+        if (tasksRes.ok) {
+          const tasksData = await tasksRes.json();
+          console.log('Tasks data:', tasksData);
+          setTasks(tasksData?.data || []);
+        }
 
-        setStats({
-          todayCommissions: todayComm,
-          monthCommissions: monthComm,
-          activeTasks: allTasks.filter(t => t.task_status === 'available').length,
-          pendingSubmissions: allSubmissions.filter(s => s.submission_status === 'pending').length,
-        });
+        // Get submissions from API
+        const submissionsRes = await fetch('/api/admin/submissions');
+        if (submissionsRes.ok) {
+          const submissionsData = await submissionsRes.json();
+          console.log('Submissions data:', submissionsData);
+          setSubmissions(submissionsData?.data || []);
+        }
 
-        setTasks(allTasks);
-        setTransactions(transData);
-        setSubmissions(allSubmissions);
+        // Get transactions from API
+        const transactionsRes = await fetch('/api/admin/transactions');
+        if (transactionsRes.ok) {
+          const transactionsData = await transactionsRes.json();
+          console.log('Transactions data:', transactionsData);
+          setTransactions(transactionsData?.data || []);
+        }
       } catch (error) {
         console.error('Error loading admin data:', error);
       } finally {
@@ -179,7 +206,7 @@ export default function AdminDashboard() {
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Today's Commission</p>
                     <p className="text-3xl font-bold text-green-400">
-                      {stats.todayCommissions.toFixed(2)} π
+                      {stats.dailyCommission?.toFixed(2) || '0.00'} π
                     </p>
                   </div>
                   <DollarSign className="w-8 h-8 text-green-500/50" />
@@ -189,9 +216,9 @@ export default function AdminDashboard() {
               <Card className="glassmorphism border-white/10 p-6">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm text-gray-400 mb-1">This Month</p>
+                    <p className="text-sm text-gray-400 mb-1">Total Commission</p>
                     <p className="text-3xl font-bold text-blue-400">
-                      {stats.monthCommissions.toFixed(2)} π
+                      {stats.totalCommission?.toFixed(2) || '0.00'} π
                     </p>
                   </div>
                   <TrendingUp className="w-8 h-8 text-blue-500/50" />
@@ -202,7 +229,7 @@ export default function AdminDashboard() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Active Tasks</p>
-                    <p className="text-3xl font-bold text-purple-400">{stats.activeTasks}</p>
+                    <p className="text-3xl font-bold text-purple-400">{stats.activeTasks || 0}</p>
                   </div>
                   <Zap className="w-8 h-8 text-purple-500/50" />
                 </div>
@@ -213,7 +240,7 @@ export default function AdminDashboard() {
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Pending Review</p>
                     <p className="text-3xl font-bold text-orange-400">
-                      {stats.pendingSubmissions}
+                      {stats.pendingSubmissions || 0}
                     </p>
                   </div>
                   <Clock className="w-8 h-8 text-orange-500/50" />
@@ -229,9 +256,10 @@ export default function AdminDashboard() {
                 <Card className="glassmorphism border-white/10 p-6">
                   <h2 className="text-xl font-bold text-white mb-4">Active Tasks</h2>
                   <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {tasks.filter(t => t.task_status === 'available').length > 0 ? (
+                    {tasks && tasks.length > 0 ? (
                       tasks
-                        .filter(t => t.task_status === 'available')
+                        .filter(t => t.task_status === 'available' || t.task_status === 'active')
+                        .slice(0, 10)
                         .map(task => (
                           <div
                             key={task.id}
@@ -243,7 +271,7 @@ export default function AdminDashboard() {
                                 {task.pi_reward}π
                               </Badge>
                             </div>
-                            <p className="text-sm text-gray-400 mb-2">{task.description}</p>
+                            <p className="text-sm text-gray-400 mb-2 line-clamp-2">{task.description}</p>
                             <div className="flex gap-2 flex-wrap">
                               <Badge variant="outline" className="border-white/10">
                                 {task.slots_remaining}/{task.slots_available} slots
@@ -264,9 +292,10 @@ export default function AdminDashboard() {
                 <Card className="glassmorphism border-white/10 p-6">
                   <h2 className="text-xl font-bold text-white mb-4">Pending Submissions</h2>
                   <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {submissions.filter(s => s.submission_status === 'pending').length > 0 ? (
+                    {submissions && submissions.length > 0 ? (
                       submissions
-                        .filter(s => s.submission_status === 'pending')
+                        .filter(s => s.submission_status === 'pending' || s.submission_status === 'submitted')
+                        .slice(0, 10)
                         .map(submission => (
                           <div
                             key={submission.id}
@@ -317,30 +346,31 @@ export default function AdminDashboard() {
                 <Card className="glassmorphism border-white/10 p-6">
                   <h2 className="text-xl font-bold text-white mb-4">Recent Transactions</h2>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {transactions.slice(0, 5).map(tx => (
-                      <div
-                        key={tx.id}
-                        className="p-3 rounded bg-slate-800/50 border border-white/10 text-sm"
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-gray-400 capitalize">{tx.transaction_type}</span>
-                          <span
-                            className={
-                              tx.transaction_status === 'completed'
-                                ? 'text-green-400'
-                                : 'text-orange-400'
-                            }
-                          >
-                            {tx.amount} π
-                          </span>
+                    {transactions && transactions.length > 0 ? (
+                      transactions.slice(0, 5).map(tx => (
+                        <div
+                          key={tx.id}
+                          className="p-3 rounded bg-slate-800/50 border border-white/10 text-sm"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-gray-400 capitalize">{tx.transaction_type}</span>
+                            <span
+                              className={
+                                tx.transaction_status === 'completed'
+                                  ? 'text-green-400'
+                                  : 'text-orange-400'
+                              }
+                            >
+                              {tx.amount} π
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {new Date(tx.timestamp).toLocaleDateString()}
+                          </p>
                         </div>
-                        <p className="text-xs text-gray-500">
-                          {new Date(tx.timestamp).toLocaleDateString()}
-                        </p>
-                      </div>
-                    ))}
-                    {transactions.length === 0 && (
-                      <p className="text-gray-400 text-xs py-4">No transactions today</p>
+                      ))
+                    ) : (
+                      <p className="text-gray-400 text-xs py-4">No transactions</p>
                     )}
                   </div>
                 </Card>
