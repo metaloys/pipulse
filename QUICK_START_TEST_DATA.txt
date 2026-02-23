@@ -1,0 +1,81 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    🎯 QUICK START - TEST DATA IN 3 STEPS                    ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+
+STEP 1️⃣  COPY
+──────────────────────────────────────────────────────────────────────────────
+Open file: LEADERBOARD_TEST_DATA_INSERT.sql
+Select All (Ctrl+A)
+Copy (Ctrl+C)
+
+
+STEP 2️⃣  PASTE IN SUPABASE
+──────────────────────────────────────────────────────────────────────────────
+Go to: https://supabase.com/dashboard
+Select your PiPulse project
+Click: SQL Editor (left sidebar)
+Click: New Query
+Paste (Ctrl+V)
+Click: Run (or Ctrl+Enter)
+
+
+STEP 3️⃣  REFRESH & VIEW
+──────────────────────────────────────────────────────────────────────────────
+Refresh PiPulse app (F5)
+Scroll to LEADERBOARD
+Click: Top Earners tab
+See test data! 🎉
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+WHAT YOU'LL SEE:
+
+Your Dashboard:
+  Today's Earnings: 0π       (You're new, haven't earned yet ✓ correct)
+  Tasks Completed: 0         (You haven't done any tasks ✓ correct)
+  Available Tasks: 24        (Test tasks available)
+  Weekly Earnings: 0π        (You haven't earned yet ✓ correct)
+
+Top Earners Leaderboard:
+  🥇 #1  pro_worker_elite      1250.50π   87 tasks
+  🥈 #2  expert_tasker          950.25π   65 tasks
+  🥉 #3  steady_earner          750.75π   52 tasks
+  ... 7 more workers
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+PREVIOUS ERRORS - NOW FIXED ✅
+
+❌ "invalid input syntax for type uuid: 'test-worker-001'"
+   ✅ FIXED: All IDs are now valid UUIDs
+
+❌ "null value in column pi_wallet_address violates not-null constraint"
+   ✅ FIXED: All users have wallet addresses
+
+❌ "column requirements is of type text[] but expression is of type jsonb"
+   ✅ FIXED: All requirements use ARRAY[] format
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+DASHBOARD EXPLANATION:
+
+Q: Why does my dashboard show "0 Earnings, 0 Tasks"?
+A: Because you just created your account! The dashboard shows YOUR real data:
+   • Your total_earnings (which is 0 - you haven't completed tasks)
+   • Your total_tasks_completed (which is 0 - you haven't submitted any)
+   
+   This is CORRECT behavior. It's not showing test data - it's showing YOUR data.
+
+Q: Where are the test workers?
+A: In the LEADERBOARD section! They're different users with their own earnings:
+   • Leaderboard shows TOP 10 workers by earnings
+   • Your dashboard shows YOUR personal stats
+   
+   Two different things displaying different data = working correctly ✓
+
+
+═══════════════════════════════════════════════════════════════════════════════
