@@ -955,3 +955,126 @@ export async function serverDecrementTaskSlots(taskId: string) {
   }
 }
 
+// ============================================================================
+// PLATFORM SETTINGS - SERVER-SIDE OPERATIONS
+// ============================================================================
+
+/**
+ * Get platform setting by key
+ */
+export async function serverGetPlatformSetting(key: string): Promise<string | null> {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', key)
+      .maybeSingle();
+
+    if (error) {
+      console.error(`Error fetching platform setting ${key}:`, error);
+      return null;
+    }
+
+    return data?.value || null;
+  } catch (error) {
+    console.error(`Error in serverGetPlatformSetting:`, error);
+    return null;
+  }
+}
+
+/**
+ * Get commission rate from platform_settings (default 15%)
+ */
+export async function serverGetCommissionRate(): Promise<number> {
+  try {
+    const value = await serverGetPlatformSetting('commission_rate');
+    if (value) {
+      const rate = parseFloat(value);
+      if (!isNaN(rate)) {
+        return rate;
+      }
+    }
+    console.warn('Commission rate not set, using default 15%');
+    return 15;
+  } catch (error) {
+    console.error('Error in serverGetCommissionRate:', error);
+    return 15;
+  }
+}
+
+/**
+ * Get all platform settings
+ */
+export async function serverGetAllPlatformSettings(): Promise<Record<string, string>> {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from('platform_settings')
+      .select('key, value');
+
+    if (error) {
+      console.error('Error fetching platform settings:', error);
+      return {};
+    }
+
+    const settings: Record<string, string> = {};
+    (data || []).forEach((row: any) => {
+      settings[row.key] = row.value;
+    });
+
+    return settings;
+  } catch (error) {
+    console.error('Error in serverGetAllPlatformSettings:', error);
+    return {};
+  }
+}
+
+/**
+ * Update platform setting
+ */
+export async function serverUpdatePlatformSetting(
+  key: string,
+  value: string
+): Promise<boolean> {
+  try {
+    const supabase = getServerSupabase();
+
+    // Try to update first
+    const { error: updateError } = await supabase
+      .from('platform_settings')
+      .update({
+        value,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('key', key);
+
+    // If update failed with no rows, insert instead
+    if (updateError && updateError.code === 'PGRST116') {
+      const { error: insertError } = await supabase
+        .from('platform_settings')
+        .insert([
+          {
+            key,
+            value,
+            updated_at: new Date().toISOString(),
+          },
+        ]);
+
+      if (insertError) {
+        console.error(`Error inserting platform setting ${key}:`, insertError);
+        return false;
+      }
+    } else if (updateError) {
+      console.error(`Error updating platform setting ${key}:`, updateError);
+      return false;
+    }
+
+    console.log(`✅ Platform setting updated: ${key} = ${value}`);
+    return true;
+  } catch (error) {
+    console.error('Error in serverUpdatePlatformSetting:', error);
+    return false;
+  }
+}
+

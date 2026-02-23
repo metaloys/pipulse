@@ -70,10 +70,40 @@ export default function AdminSettingsPage() {
       }
 
       // Fetch settings
-      const settingsRes = await fetch('/api/admin/settings');
+      const adminPassword = sessionStorage.getItem('adminPassword') || '';
+      const settingsRes = await fetch('/api/admin/settings', {
+        headers: {
+          'x-admin-password': adminPassword,
+        },
+      });
       if (settingsRes.ok) {
-        const settingsData = await settingsRes.json();
-        setSettings(settingsData || settings);
+        const response = await settingsRes.json();
+        const settingsData = response.data || {};
+        
+        // Convert API response (key-value pairs) to PlatformSettings interface
+        const parsedSettings: PlatformSettings = {
+          platform_name: settingsData.platform_name || 'PiPulse',
+          commission_rate: settingsData.commission_rate 
+            ? parseFloat(settingsData.commission_rate) 
+            : 15,
+          min_task_reward: settingsData.min_task_reward 
+            ? parseFloat(settingsData.min_task_reward) 
+            : 1,
+          max_task_reward: settingsData.max_task_reward 
+            ? parseFloat(settingsData.max_task_reward) 
+            : 100,
+          task_approval_timeout: settingsData.task_approval_timeout 
+            ? parseInt(settingsData.task_approval_timeout) 
+            : 48,
+          dispute_resolution_timeout: settingsData.dispute_resolution_timeout 
+            ? parseInt(settingsData.dispute_resolution_timeout) 
+            : 72,
+          feature_tasks_enabled: settingsData.feature_tasks_enabled === 'true' || settingsData.feature_tasks_enabled === true,
+          referral_bonus_enabled: settingsData.referral_bonus_enabled === 'true' || settingsData.referral_bonus_enabled === true,
+          maintenance_mode: settingsData.maintenance_mode === 'true' || settingsData.maintenance_mode === true,
+        };
+        
+        setSettings(parsedSettings);
       }
 
       setError('');
@@ -93,14 +123,34 @@ export default function AdminSettingsPage() {
 
   const saveSettings = async () => {
     try {
-      const res = await fetch('/api/admin/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
+      const adminPassword = sessionStorage.getItem('adminPassword') || '';
+      
+      // Save each setting individually
+      const settingsToSave = [
+        { key: 'platform_name', value: settings.platform_name },
+        { key: 'commission_rate', value: settings.commission_rate.toString() },
+        { key: 'min_task_reward', value: settings.min_task_reward.toString() },
+        { key: 'max_task_reward', value: settings.max_task_reward.toString() },
+        { key: 'task_approval_timeout', value: settings.task_approval_timeout.toString() },
+        { key: 'dispute_resolution_timeout', value: settings.dispute_resolution_timeout.toString() },
+        { key: 'feature_tasks_enabled', value: settings.feature_tasks_enabled.toString() },
+        { key: 'referral_bonus_enabled', value: settings.referral_bonus_enabled.toString() },
+        { key: 'maintenance_mode', value: settings.maintenance_mode.toString() },
+      ];
 
-      if (!res.ok) {
-        throw new Error('Failed to save settings');
+      for (const setting of settingsToSave) {
+        const res = await fetch('/api/admin/settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-password': adminPassword,
+          },
+          body: JSON.stringify(setting),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Failed to save ${setting.key}`);
+        }
       }
 
       setUnsavedChanges(false);
@@ -108,6 +158,7 @@ export default function AdminSettingsPage() {
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       setError('Failed to save settings');
+      console.error('Error saving settings:', err);
     }
   };
 
