@@ -246,7 +246,7 @@ export async function updateTask(taskId: string, updates: Partial<DatabaseTask>)
   // If slots_available is being updated, recalculate slots_remaining
   if (updates.slots_available !== undefined) {
     // Get current task to calculate the difference
-    const currentTask = await getTask(taskId);
+    const currentTask = await getTaskById(taskId);
     if (currentTask) {
       const oldSlotsAvailable = currentTask.slots_available;
       const newSlotsAvailable = updates.slots_available;
@@ -264,11 +264,12 @@ export async function updateTask(taskId: string, updates: Partial<DatabaseTask>)
   // Task is available if: has remaining slots AND deadline not expired
   const now = new Date();
   if (updatesToApply.deadline || updates.slots_remaining !== undefined) {
+    const currentTask = await getTaskById(taskId);
     const deadline = updatesToApply.deadline ? new Date(updatesToApply.deadline) : 
-                     (await getTask(taskId))?.deadline ? new Date((await getTask(taskId))!.deadline) : null;
+                     (currentTask?.deadline ? new Date(currentTask.deadline) : null);
     const slotsRemaining = updatesToApply.slots_remaining !== undefined ? 
                           updatesToApply.slots_remaining : 
-                          (await getTask(taskId))?.slots_remaining;
+                          currentTask?.slots_remaining;
     
     const hasAvailableSlots = slotsRemaining && slotsRemaining > 0;
     const deadlineNotExpired = deadline && deadline > now;
