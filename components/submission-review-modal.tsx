@@ -225,7 +225,7 @@ export function SubmissionReviewModal({
           )}
 
           {/* Action Buttons */}
-          {submission.submission_status === 'pending' ? (
+          {submission.submission_status === 'submitted' ? (
             <>
               {!showRejectForm ? (
                 <div className="flex gap-3 pt-4 border-t border-white/10">
