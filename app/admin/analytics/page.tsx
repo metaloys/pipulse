@@ -49,8 +49,12 @@ export default function AdminAnalyticsPage() {
       }
     };
     checkAuth();
-    fetchData();
   }, [router]);
+
+  // Auto-fetch data on mount and when dates change
+  useEffect(() => {
+    fetchData();
+  }, [startDate, endDate]);
 
   const fetchData = async () => {
     try {
