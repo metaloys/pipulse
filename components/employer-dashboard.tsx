@@ -151,7 +151,7 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
   };
 
   const pendingSubmissions = submissions.filter(
-    (item) => item.submission.submission_status === 'pending'
+    (item) => item.submission.submission_status === 'submitted'
   );
   const approvedSubmissions = submissions.filter(
     (item) => item.submission.submission_status === 'approved'
