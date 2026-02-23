@@ -50,14 +50,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract metadata fields (may be empty for incomplete payments from auth)
-    const taskId = metadata?.task_id;
-    const workerId = metadata?.worker_id;
-    const submissionId = metadata?.submission_id;
-    const workerAmount = metadata?.amount;
-    const pipulseFee = metadata?.fee || 0;
+    // Extract metadata fields - handle both formats:
+    // 1. Nested in metadata object (from payments/complete metadata)
+    // 2. Top-level fields (from pi-payment.ts)
+    const taskId = body.taskId || metadata?.task_id;
+    const workerId = body.workerId || metadata?.worker_id;
+    const submissionId = body.submissionId || metadata?.submission_id;
+    const workerAmount = body.amount || metadata?.amount;
+    const pipulseFee = metadata?.fee || body.fee || 0;
 
-    console.log(`📋 Extracted metadata:`, {
+    console.log(`📋 Extracted data:`, {
       taskId,
       workerId,
       submissionId,
@@ -200,19 +202,25 @@ export async function POST(request: NextRequest) {
           const newTotalEarnings = (userData.total_earnings || 0) + paymentDetailsAmount;
           const newTasksCompleted = (userData.total_tasks_completed || 0) + 1;
 
-          const { error: updateError } = await supabaseAdmin
+          const { data: updatedUser, error: updateError } = await supabaseAdmin
             .from('users')
             .update({
               total_earnings: newTotalEarnings,
               total_tasks_completed: newTasksCompleted,
               updated_at: new Date().toISOString(),
             })
-            .eq('id', workerId);
+            .eq('id', workerId)
+            .select()
+            .maybeSingle();
 
           if (updateError) {
             console.error(`❌ [STEP 3] Failed to update user earnings:`, updateError);
+          } else if (updatedUser) {
+            console.log(`✅ [STEP 3] Worker earnings updated:`);
+            console.log(`   New total earnings: ${updatedUser.total_earnings}π`);
+            console.log(`   New tasks completed: ${updatedUser.total_tasks_completed}`);
           } else {
-            console.log(`✅ [STEP 3] Worker earnings updated: ${newTotalEarnings}π, tasks completed: ${newTasksCompleted}`);
+            console.error(`❌ [STEP 3] Update query returned no data for worker ${workerId}`);
           }
         } else {
           console.error(`❌ [STEP 3] Worker not found: ${workerId}`);
