@@ -35,7 +35,7 @@ export function AdminStatsBar({ stats, loading = false }: StatsBarProps) {
             {loading ? (
               <Loader className="w-6 h-6 animate-spin" />
             ) : (
-              `${data.totalCommission.toFixed(2)} π`
+              `${(parseFloat(String(data.totalCommission || 0)) || 0).toFixed(2)} π`
             )}
           </p>
           <div className="w-12 h-12 rounded-lg bg-purple-600/20 flex items-center justify-center">
@@ -52,7 +52,7 @@ export function AdminStatsBar({ stats, loading = false }: StatsBarProps) {
             {loading ? (
               <Loader className="w-6 h-6 animate-spin" />
             ) : (
-              `${data.dailyCommission.toFixed(2)} π`
+              `${(parseFloat(String(data.dailyCommission || 0)) || 0).toFixed(2)} π`
             )}
           </p>
           <div className="w-12 h-12 rounded-lg bg-orange-600/20 flex items-center justify-center">
@@ -86,7 +86,7 @@ export function AdminStatsBar({ stats, loading = false }: StatsBarProps) {
             {loading ? (
               <Loader className="w-6 h-6 animate-spin" />
             ) : (
-              `${data.totalVolume.toFixed(2)} π`
+              `${(parseFloat(String(data.totalVolume || 0)) || 0).toFixed(2)} π`
             )}
           </p>
           <div className="w-12 h-12 rounded-lg bg-green-600/20 flex items-center justify-center">

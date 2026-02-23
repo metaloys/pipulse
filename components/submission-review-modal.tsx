@@ -210,12 +210,12 @@ export function SubmissionReviewModal({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">PiPulse Fee (15%):</span>
-                  <span className="font-semibold text-orange-400">{(task.pi_reward * 0.15).toFixed(2)} π</span>
+                  <span className="font-semibold text-orange-400">{(parseFloat(String((task.pi_reward || 0) * 0.15)) || 0).toFixed(2)} π</span>
                 </div>
                 <div className="h-px bg-white/10 my-2" />
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-semibold">Worker Receives:</span>
-                  <span className="font-bold text-green-400">{(task.pi_reward * 0.85).toFixed(2)} π</span>
+                  <span className="font-bold text-green-400">{(parseFloat(String((task.pi_reward || 0) * 0.85)) || 0).toFixed(2)} π</span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-3">

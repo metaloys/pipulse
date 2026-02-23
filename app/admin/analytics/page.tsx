@@ -151,7 +151,7 @@ export default function AdminAnalyticsPage() {
                     <YAxis stroke="#94a3b8" />
                     <Tooltip 
                       contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px', color: '#fff' }}
-                      formatter={(value) => `${Number(value || 0).toFixed(2)} π`}
+                      formatter={(value) => `${(parseFloat(String(value || 0)) || 0).toFixed(2)} π`}
                     />
                     <Legend />
                     <Line type="monotone" dataKey="commission" stroke="#a855f7" strokeWidth={2} dot={{ fill: '#a855f7' }} />
@@ -193,7 +193,7 @@ export default function AdminAnalyticsPage() {
                     <p className="text-gray-400 text-sm">Avg Daily Commission</p>
                     <p className="text-2xl font-bold text-white mt-1">
                       {analyticsData.length > 0 
-                        ? Number(analyticsData.reduce((sum, d) => sum + d.commission, 0) / analyticsData.length || 0).toFixed(2)
+                        ? (parseFloat(String(analyticsData.reduce((sum, d) => sum + d.commission, 0) / analyticsData.length || 0)) || 0).toFixed(2)
                         : '0.00'} π
                     </p>
                   </div>
@@ -219,7 +219,7 @@ export default function AdminAnalyticsPage() {
                     <p className="text-gray-400 text-sm">Total Period Volume</p>
                     <p className="text-2xl font-bold text-white mt-1">
                       {analyticsData.length > 0 
-                        ? Number(analyticsData.reduce((sum, d) => sum + d.volume, 0) || 0).toFixed(2)
+                        ? (parseFloat(String(analyticsData.reduce((sum, d) => sum + d.volume, 0) || 0)) || 0).toFixed(2)
                         : '0.00'} π
                     </p>
                   </div>
@@ -250,9 +250,9 @@ export default function AdminAnalyticsPage() {
                       {analyticsData.map((day) => (
                         <tr key={day.date} className="hover:bg-slate-700/30 transition">
                           <td className="px-6 py-4 text-gray-300">{new Date(day.date).toLocaleDateString()}</td>
-                          <td className="px-6 py-4 text-right text-emerald-400 font-semibold">{Number(day.commission || 0).toFixed(2)} π</td>
+                          <td className="px-6 py-4 text-right text-emerald-400 font-semibold">{(parseFloat(String(day.commission || 0)) || 0).toFixed(2)} π</td>
                           <td className="px-6 py-4 text-right text-white">{day.transactions}</td>
-                          <td className="px-6 py-4 text-right text-blue-400">{Number(day.volume || 0).toFixed(2)}</td>
+                          <td className="px-6 py-4 text-right text-blue-400">{(parseFloat(String(day.volume || 0)) || 0).toFixed(2)}</td>
                           <td className="px-6 py-4 text-right text-white">{day.users_active}</td>
                           <td className="px-6 py-4 text-right text-white">{day.new_tasks}</td>
                           <td className="px-6 py-4 text-right text-white">{day.submissions}</td>

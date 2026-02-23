@@ -555,9 +555,9 @@ export async function getUserStats(userId: string) {
     const submissions = await getWorkerSubmissions(userId);
 
     return {
-      dailyEarnings: parseFloat(dailyEarnings.toFixed(2)),
-      weeklyEarnings: parseFloat(weeklyEarnings.toFixed(2)),
-      totalEarnings: parseFloat(totalEarnings.toFixed(2)),
+      dailyEarnings: parseFloat((parseFloat(String(dailyEarnings || 0)) || 0).toFixed(2)),
+      weeklyEarnings: parseFloat((parseFloat(String(weeklyEarnings || 0)) || 0).toFixed(2)),
+      totalEarnings: parseFloat((parseFloat(String(totalEarnings || 0)) || 0).toFixed(2)),
       tasksCompleted: transactions.length, // Count of completed transactions
       currentStreak: user.current_streak || 0,
       level: user.level || 'Newcomer',

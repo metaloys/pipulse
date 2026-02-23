@@ -140,14 +140,9 @@ ORDER BY total_earnings DESC;
 
 -- Check 5: Verify notifications foreign key
 -- Should show: notifications_user_id_fkey references public.users
-SELECT 
-  constraint_name,
-  table_name,
-  column_name,
-  referenced_table_name,
-  referenced_column_name
+SELECT constraint_name, table_name, column_name
 FROM information_schema.key_column_usage
-WHERE constraint_name = 'notifications_user_id_fkey';
+WHERE table_name = 'notifications' AND column_name = 'user_id';
 
 -- ════════════════════════════════════════════════════════════════════════════════
 -- DONE!

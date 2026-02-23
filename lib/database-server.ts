@@ -688,7 +688,7 @@ export async function serverGetPlatformStats() {
       totalUsers: totalUsers || 0,
       totalTasks: totalTasks || 0,
       totalTransactions: totalTransactions || 0,
-      totalCommission: parseFloat(totalCommission.toFixed(2)),
+      totalCommission: parseFloat((parseFloat(String(totalCommission || 0)) || 0).toFixed(2)),
     };
   } catch (error) {
     console.error('Error in serverGetPlatformStats:', error);

@@ -160,8 +160,8 @@ export async function GET(request: NextRequest) {
     console.log('✅ [ADMIN STATS] Active tasks:', activeTasks);
 
     const response = {
-      totalCommission: typeof totalCommission === 'number' ? parseFloat(totalCommission.toFixed(2)) : 0,
-      dailyCommission: typeof dailyCommission === 'number' ? parseFloat(dailyCommission.toFixed(2)) : 0,
+      totalCommission: typeof totalCommission === 'number' ? parseFloat((parseFloat(String(totalCommission || 0)) || 0).toFixed(2)) : 0,
+      dailyCommission: typeof dailyCommission === 'number' ? parseFloat((parseFloat(String(dailyCommission || 0)) || 0).toFixed(2)) : 0,
       totalUsers: totalUsers || 0,
       totalTasks: totalTasks || 0,
       activeTasks: activeTasks || 0,
