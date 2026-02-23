@@ -206,7 +206,7 @@ export default function AdminDashboard() {
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Today's Commission</p>
                     <p className="text-3xl font-bold text-green-400">
-                      {stats.dailyCommission?.toFixed(2) || '0.00'} π
+                      {typeof stats.dailyCommission === 'number' ? stats.dailyCommission.toFixed(2) : '0.00'} π
                     </p>
                   </div>
                   <DollarSign className="w-8 h-8 text-green-500/50" />
@@ -218,7 +218,7 @@ export default function AdminDashboard() {
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Total Commission</p>
                     <p className="text-3xl font-bold text-blue-400">
-                      {stats.totalCommission?.toFixed(2) || '0.00'} π
+                      {typeof stats.totalCommission === 'number' ? stats.totalCommission.toFixed(2) : '0.00'} π
                     </p>
                   </div>
                   <TrendingUp className="w-8 h-8 text-blue-500/50" />

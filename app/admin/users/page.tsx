@@ -335,7 +335,7 @@ export default function AdminUsersPage() {
                           {user.level}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right text-white font-semibold">{user.total_earnings.toFixed(2)} π</td>
+                      <td className="px-6 py-4 text-right text-white font-semibold">{Number(user.total_earnings || 0).toFixed(2)} π</td>
                       <td className="px-6 py-4 text-right text-gray-300">{user.tasks_completed}</td>
                       <td className="px-6 py-4 text-right text-orange-400 font-semibold">
                         {user.current_streak > 0 ? `🔥 ${user.current_streak}` : '-'}
@@ -406,7 +406,7 @@ export default function AdminUsersPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-slate-700/30 p-4 rounded-lg">
                       <p className="text-sm text-gray-400 mb-1">Total Earnings</p>
-                      <p className="text-2xl font-bold text-white">{selectedUser.total_earnings.toFixed(2)} π</p>
+                      <p className="text-2xl font-bold text-white">{Number(selectedUser.total_earnings || 0).toFixed(2)} π</p>
                     </div>
                     <div className="bg-slate-700/30 p-4 rounded-lg">
                       <p className="text-sm text-gray-400 mb-1">Tasks Completed</p>

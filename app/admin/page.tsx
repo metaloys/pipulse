@@ -298,7 +298,7 @@ function OverviewSection() {
                   <p className="text-white font-medium">{user.username}</p>
                   <p className="text-xs text-gray-400">{user.level}</p>
                 </div>
-                <p className="text-purple-400 font-semibold">{user.amount.toFixed(2)} π</p>
+                <p className="text-purple-400 font-semibold">{Number(user.amount || 0).toFixed(2)} π</p>
               </div>
             ))}
           </div>
@@ -314,7 +314,7 @@ function OverviewSection() {
                   <p className="text-white font-medium">{user.username}</p>
                   <p className="text-xs text-gray-400">{user.level}</p>
                 </div>
-                <p className="text-orange-400 font-semibold">{user.amount.toFixed(2)} π</p>
+                <p className="text-orange-400 font-semibold">{Number(user.amount || 0).toFixed(2)} π</p>
               </div>
             ))}
           </div>

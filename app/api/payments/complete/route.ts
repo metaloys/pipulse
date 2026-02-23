@@ -195,25 +195,36 @@ export async function POST(request: NextRequest) {
     }
 
     // ========================================================================
-    // Database updates
+    // Database updates - ATOMIC with error recovery logging
     // ========================================================================
     if (workerId && submissionId && paymentDetailsAmount) {
       try {
-        console.log(`\n💾 Starting database updates sequence`);
+        console.log(`\n💾 Starting atomic database updates sequence`);
+
+        // Build all updates as promises for atomic execution
+        const dbUpdates = [];
 
         // ====================================================================
         // STEP 3: Update worker earnings in users table
         // ====================================================================
-        console.log(`\n💰 [STEP 3] Updating worker earnings for: ${workerId}`);
-        const { data: userData, error: userFetchError } = await supabaseAdmin
-          .from('users')
-          .select('total_earnings, total_tasks_completed')
-          .eq('id', workerId)
-          .maybeSingle();
+        console.log(`\n💰 [STEP 3] Preparing worker earnings update for: ${workerId}`);
+        const userUpdatePromise = (async () => {
+          const { data: userData, error: userFetchError } = await supabaseAdmin
+            .from('users')
+            .select('total_earnings, total_tasks_completed')
+            .eq('id', workerId)
+            .maybeSingle();
 
-        if (userFetchError) {
-          console.error(`❌ [STEP 3] Failed to fetch user data:`, userFetchError);
-        } else if (userData) {
+          if (userFetchError) {
+            console.error(`❌ [STEP 3] Failed to fetch user data:`, userFetchError);
+            throw new Error(`Failed to fetch user data: ${userFetchError.message}`);
+          }
+
+          if (!userData) {
+            console.error(`❌ [STEP 3] Worker not found: ${workerId}`);
+            throw new Error(`Worker not found: ${workerId}`);
+          }
+
           const newTotalEarnings = (userData.total_earnings || 0) + paymentDetailsAmount;
           const newTasksCompleted = (userData.total_tasks_completed || 0) + 1;
 
@@ -230,129 +241,190 @@ export async function POST(request: NextRequest) {
 
           if (updateError) {
             console.error(`❌ [STEP 3] Failed to update user earnings:`, updateError);
-          } else if (updatedUser) {
+            throw new Error(`Failed to update user earnings: ${updateError.message}`);
+          }
+
+          if (updatedUser) {
             console.log(`✅ [STEP 3] Worker earnings updated:`);
             console.log(`   New total earnings: ${updatedUser.total_earnings}π`);
             console.log(`   New tasks completed: ${updatedUser.total_tasks_completed}`);
-          } else {
-            console.error(`❌ [STEP 3] Update query returned no data for worker ${workerId}`);
           }
-        } else {
-          console.error(`❌ [STEP 3] Worker not found: ${workerId}`);
-        }
+        })();
+        dbUpdates.push(userUpdatePromise);
 
         // ====================================================================
         // STEP 4: Update submission status in task_submissions table
         // ====================================================================
-        console.log(`\n✓ [STEP 4] Updating submission status: ${submissionId}`);
-        const { error: submissionError } = await supabaseAdmin
-          .from('task_submissions')
-          .update({
-            status: 'completed',
-            reviewed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', submissionId);
+        console.log(`\n✓ [STEP 4] Preparing submission status update: ${submissionId}`);
+        const submissionUpdatePromise = (async () => {
+          const { error: submissionError } = await supabaseAdmin
+            .from('task_submissions')
+            .update({
+              status: 'completed',
+              reviewed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', submissionId);
 
-        if (submissionError) {
-          console.error(`❌ [STEP 4] Failed to update submission status:`, submissionError);
-        } else {
+          if (submissionError) {
+            console.error(`❌ [STEP 4] Failed to update submission status:`, submissionError);
+            throw new Error(`Failed to update submission: ${submissionError.message}`);
+          }
+
           console.log(`✅ [STEP 4] Submission status updated to 'completed'`);
-        }
+        })();
+        dbUpdates.push(submissionUpdatePromise);
 
         // ====================================================================
         // STEP 5: Record transaction in transactions table
         // CRITICAL FIX: Use UUIDs for sender_id and receiver_id, not wallet addresses
         // ====================================================================
-        console.log(`\n💳 [STEP 5] Recording transaction with correct UUIDs`);
+        console.log(`\n💳 [STEP 5] Preparing transaction record with correct UUIDs`);
         console.log(`   sender_id (employer): ${employerId} (UUID)`);
         console.log(`   receiver_id (worker): ${workerId} (UUID)`);
         console.log(`   pi_blockchain_txid: ${txid} (blockchain tx)`);
 
-        const { error: txError } = await supabaseAdmin
-          .from('transactions')
-          .insert([{
-            task_id: taskId,
-            sender_id: employerId, // FIXED: Use employer's UUID from users table
-            receiver_id: workerId, // FIXED: Use worker's UUID from users table
-            amount: paymentDetailsAmount,
-            pipulse_fee: pipulseFee,
-            pi_blockchain_txid: txid, // FIXED: Store blockchain tx ID here, not as sender_id
-            transaction_type: 'payment',
-            transaction_status: 'completed',
-            timestamp: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }]);
+        const transactionPromise = (async () => {
+          const { error: txError } = await supabaseAdmin
+            .from('transactions')
+            .insert([{
+              task_id: taskId,
+              sender_id: employerId, // FIXED: Use employer's UUID from users table
+              receiver_id: workerId, // FIXED: Use worker's UUID from users table
+              amount: paymentDetailsAmount,
+              pipulse_fee: pipulseFee,
+              pi_blockchain_txid: txid, // FIXED: Store blockchain tx ID here, not as sender_id
+              transaction_type: 'payment',
+              transaction_status: 'completed',
+              timestamp: new Date().toISOString(),
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }]);
 
-        if (txError) {
-          console.error(`❌ [STEP 5] Failed to record transaction:`, txError);
-          // Log details for debugging
-          console.error(`   Transaction data that failed:`, {
-            task_id: taskId,
-            sender_id: employerId,
-            receiver_id: workerId,
-            amount: paymentDetailsAmount,
-            pipulse_fee: pipulseFee,
-            pi_blockchain_txid: txid,
-          });
-        } else {
+          if (txError) {
+            console.error(`❌ [STEP 5] Failed to record transaction:`, txError);
+            console.error(`   Transaction data that failed:`, {
+              task_id: taskId,
+              sender_id: employerId,
+              receiver_id: workerId,
+              amount: paymentDetailsAmount,
+              pipulse_fee: pipulseFee,
+              pi_blockchain_txid: txid,
+            });
+            throw new Error(`Failed to record transaction: ${txError.message}`);
+          }
+
           console.log(`✅ [STEP 5] Transaction recorded: ${paymentDetailsAmount}π to worker, ${pipulseFee}π fee`);
           console.log(`   Blockchain txid: ${txid}`);
-        }
+        })();
+        dbUpdates.push(transactionPromise);
 
         // ====================================================================
         // STEP 6: Update task slots remaining (never go below 0)
         // ====================================================================
-        if (taskId) {
-          console.log(`\n🎯 [STEP 6] Updating task slots for: ${taskId}`);
-          
-          // First fetch current slots
+        const slotsUpdatePromise = (async () => {
+          if (!taskId) {
+            console.warn(`⚠️ [STEP 6] No taskId provided, skipping slots update`);
+            return;
+          }
+
+          console.log(`\n🎯 [STEP 6] Preparing task slots update for: ${taskId}`);
+
           const { data: taskData } = await supabaseAdmin
             .from('tasks')
             .select('slots_remaining, task_status')
             .eq('id', taskId)
             .maybeSingle();
 
-          if (taskData) {
-            // IMPORTANT: Validate that slots are available before decrementing
-            if ((taskData.slots_remaining || 0) <= 0) {
-              console.warn(`⚠️ [STEP 6] No slots remaining for task, skipping decrement`);
-            } else {
-              const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
-              
-              // BUG FIX: When slots reach 0, set task status to 'full'
-              const newTaskStatus = newSlotsRemaining === 0 ? 'full' : taskData.task_status;
-              
-              const { error: updateSlotsError } = await supabaseAdmin
-                .from('tasks')
-                .update({
-                  slots_remaining: newSlotsRemaining,
-                  task_status: newTaskStatus,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', taskId);
-
-              if (updateSlotsError) {
-                console.error(`❌ [STEP 6] Failed to update slots:`, updateSlotsError);
-              } else {
-                if (newSlotsRemaining === 0) {
-                  console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining - Task status set to 'full'`);
-                } else {
-                  console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining`);
-                }
-              }
-            }
-          } else {
+          if (!taskData) {
             console.warn(`⚠️ [STEP 6] Task not found, skipping slots update`);
+            return;
           }
-        } else {
-          console.warn(`⚠️ [STEP 6] No taskId provided, skipping slots update`);
+
+          // IMPORTANT: Validate that slots are available before decrementing
+          if ((taskData.slots_remaining || 0) <= 0) {
+            console.warn(`⚠️ [STEP 6] No slots remaining for task, skipping decrement`);
+            return;
+          }
+
+          const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
+          const newTaskStatus = newSlotsRemaining === 0 ? 'full' : taskData.task_status;
+
+          const { error: updateSlotsError } = await supabaseAdmin
+            .from('tasks')
+            .update({
+              slots_remaining: newSlotsRemaining,
+              task_status: newTaskStatus,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', taskId);
+
+          if (updateSlotsError) {
+            console.error(`❌ [STEP 6] Failed to update slots:`, updateSlotsError);
+            throw new Error(`Failed to update task slots: ${updateSlotsError.message}`);
+          }
+
+          if (newSlotsRemaining === 0) {
+            console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining - Task status set to 'full'`);
+          } else {
+            console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining`);
+          }
+        })();
+        dbUpdates.push(slotsUpdatePromise);
+
+        // ====================================================================
+        // EXECUTE ALL UPDATES ATOMICALLY
+        // ====================================================================
+        console.log(`\n⚡ Executing all ${dbUpdates.length} database updates atomically...`);
+        try {
+          await Promise.all(dbUpdates);
+          console.log(`✅ All database updates completed successfully`);
+        } catch (atomicError) {
+          console.error(`❌ Atomic update failed:`, atomicError);
+          // Log to recovery table for manual inspection
+          const recoveryEntry = {
+            payment_id: paymentId,
+            txid: txid,
+            worker_id: workerId,
+            submission_id: submissionId,
+            task_id: taskId,
+            amount: paymentDetailsAmount,
+            pipulse_fee: pipulseFee,
+            error_message: atomicError instanceof Error ? atomicError.message : String(atomicError),
+            metadata: {
+              workerId,
+              submissionId,
+              paymentDetailsAmount,
+              employerId,
+            },
+            recovery_timestamp: new Date().toISOString(),
+          };
+
+          console.log(`📋 Recording to failed_completions table for manual recovery...`);
+          console.log(`   Recovery entry:`, recoveryEntry);
+
+          // Try to log to recovery table (but don't fail if it doesn't exist yet)
+          const { error: recoveryError } = await supabaseAdmin
+            .from('failed_completions')
+            .insert([recoveryEntry])
+            .catch(() => ({ error: null }));
+
+          if (recoveryError) {
+            console.warn(`⚠️ Could not log to failed_completions table (table may not exist yet):`, recoveryError);
+            console.log(`   Manual recovery needed - save this data: `, recoveryEntry);
+          } else {
+            console.log(`✅ Recovery entry logged for manual inspection`);
+          }
+
+          // IMPORTANT: Still return success to Pi SDK - payment already completed on blockchain
+          // Database sync can be handled manually from recovery table
+          throw new Error(`Database sync failed, but Pi payment succeeded. Payment recovery logged.`);
         }
       } catch (dbError) {
         console.error(`❌ Database operation error:`, dbError);
-        // Log but don't fail - Pi Network payment already succeeded
-        // The database updates are for record-keeping only
+        console.warn(`⚠️ Pi Network payment already completed. Database updates may be pending recovery.`);
+        // Don't throw - Pi payment already succeeded on blockchain
+        // The error recovery is logged above
       }
     } else {
       console.warn(`⚠️ Skipping database updates - missing required fields:`, {

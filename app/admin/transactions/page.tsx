@@ -132,8 +132,8 @@ export default function AdminTransactionsPage() {
       tx.task_title,
       tx.employer_username,
       tx.worker_username,
-      tx.amount.toFixed(2),
-      tx.pipulse_fee.toFixed(2),
+      Number(tx.amount || 0).toFixed(2),
+      Number(tx.pipulse_fee || 0).toFixed(2),
       tx.transaction_status,
       tx.blockchain_tx_id,
     ]);
@@ -261,13 +261,13 @@ export default function AdminTransactionsPage() {
           <Card className="bg-slate-800/50 border-slate-700 p-4">
             <p className="text-gray-400 text-sm">Volume</p>
             <p className="text-3xl font-bold text-white mt-2">
-              {filteredTransactions.reduce((sum, t) => sum + t.amount, 0).toFixed(2)} π
+              {Number(filteredTransactions.reduce((sum, t) => sum + t.amount, 0) || 0).toFixed(2)} π
             </p>
           </Card>
           <Card className="bg-slate-800/50 border-slate-700 p-4">
             <p className="text-gray-400 text-sm">Fees</p>
             <p className="text-3xl font-bold text-white mt-2">
-              {filteredTransactions.reduce((sum, t) => sum + t.pipulse_fee, 0).toFixed(2)} π
+              {Number(filteredTransactions.reduce((sum, t) => sum + t.pipulse_fee, 0) || 0).toFixed(2)} π
             </p>
           </Card>
         </div>
@@ -310,8 +310,8 @@ export default function AdminTransactionsPage() {
                       <td className="px-6 py-4 text-white font-medium truncate">{tx.task_title}</td>
                       <td className="px-6 py-4 text-gray-300">{tx.employer_username}</td>
                       <td className="px-6 py-4 text-gray-300">{tx.worker_username}</td>
-                      <td className="px-6 py-4 text-right text-white font-semibold">{tx.amount.toFixed(2)} π</td>
-                      <td className="px-6 py-4 text-right text-orange-400">{tx.pipulse_fee.toFixed(2)} π</td>
+                      <td className="px-6 py-4 text-right text-white font-semibold">{Number(tx.amount || 0).toFixed(2)} π</td>
+                      <td className="px-6 py-4 text-right text-orange-400">{Number(tx.pipulse_fee || 0).toFixed(2)} π</td>
                       <td className="px-6 py-4">
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                           tx.transaction_status === 'completed'
@@ -380,16 +380,16 @@ export default function AdminTransactionsPage() {
                   <div className="grid grid-cols-3 gap-4">
                     <div className="bg-slate-700/30 p-4 rounded-lg">
                       <p className="text-sm text-gray-400 mb-1">Amount</p>
-                      <p className="text-lg font-bold text-white">{selectedTransaction.amount.toFixed(2)} π</p>
+                      <p className="text-lg font-bold text-white">{Number(selectedTransaction.amount || 0).toFixed(2)} π</p>
                     </div>
                     <div className="bg-slate-700/30 p-4 rounded-lg">
                       <p className="text-sm text-gray-400 mb-1">Fee</p>
-                      <p className="text-lg font-bold text-orange-400">{selectedTransaction.pipulse_fee.toFixed(2)} π</p>
+                      <p className="text-lg font-bold text-orange-400">{Number(selectedTransaction.pipulse_fee || 0).toFixed(2)} π</p>
                     </div>
                     <div className="bg-slate-700/30 p-4 rounded-lg">
                       <p className="text-sm text-gray-400 mb-1">Worker Got</p>
                       <p className="text-lg font-bold text-green-400">
-                        {(selectedTransaction.amount - selectedTransaction.pipulse_fee).toFixed(2)} π
+                        {(Number(selectedTransaction.amount || 0) - Number(selectedTransaction.pipulse_fee || 0)).toFixed(2)} π
                       </p>
                     </div>
                   </div>

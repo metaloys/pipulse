@@ -315,7 +315,7 @@ export default function AdminTasksPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-300">{task.employer_username}</td>
-                      <td className="px-6 py-4 text-right text-white font-semibold">{task.reward_per_worker.toFixed(2)} π</td>
+                      <td className="px-6 py-4 text-right text-white font-semibold">{Number(task.reward_per_worker || 0).toFixed(2)} π</td>
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <div className="w-24 bg-slate-700 rounded-full h-2">
@@ -396,7 +396,7 @@ export default function AdminTasksPage() {
                     </div>
                     <div className="bg-slate-700/30 p-4 rounded-lg">
                       <p className="text-sm text-gray-400 mb-1">Reward per Worker</p>
-                      <p className="text-white font-semibold">{selectedTask.reward_per_worker.toFixed(2)} π</p>
+                      <p className="text-white font-semibold">{Number(selectedTask.reward_per_worker || 0).toFixed(2)} π</p>
                     </div>
                   </div>
 

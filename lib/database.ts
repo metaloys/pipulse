@@ -480,6 +480,14 @@ export async function getLeaderboard(limit: number = 10) {
 
 // ============ STATS ============
 
+/**
+ * Get user stats - ALL calculated dynamically from transactions table
+ * NEVER read from stored columns - always compute from actual payment records
+ * This ensures consistency and accuracy
+ * 
+ * @param userId The user ID to get stats for
+ * @returns Stats object with daily, weekly, total earnings and tasks
+ */
 export async function getUserStats(userId: string) {
   try {
     const user = await getUserById(userId);
@@ -497,31 +505,62 @@ export async function getUserStats(userId: string) {
       };
     }
 
-    const transactions = await getUserTransactions(userId);
-    const submissions = await getWorkerSubmissions(userId);
-    
-    const dailyEarnings = transactions
-      .filter(t => {
-        const date = new Date(t.timestamp);
-        const today = new Date();
-        return date.toDateString() === today.toDateString() && t.transaction_type === 'payment';
-      })
-      .reduce((sum, t) => sum + t.amount, 0);
+    // CRITICAL FIX: Calculate all earnings dynamically from transactions table
+    // Never read from stored columns - they can become stale
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Fetch all transactions for this user as receiver
+    const { data: allTransactions, error: txError } = await supabase
+      .from('transactions')
+      .select('id, amount, pipulse_fee, created_at, transaction_status')
+      .eq('receiver_id', userId)
+      .eq('transaction_status', 'completed')
+      .order('created_at', { ascending: false });
+
+    if (txError) {
+      console.error('Error fetching transactions for stats:', txError);
+      return {
+        dailyEarnings: 0,
+        weeklyEarnings: 0,
+        totalEarnings: 0,
+        tasksCompleted: 0,
+        currentStreak: 0,
+        level: user.level || 'Newcomer',
+        availableTasksCount: 0,
+      };
+    }
+
+    const transactions = allTransactions || [];
+
+    // Calculate net earnings (amount - fee) for each period
+    const totalEarnings = transactions.reduce((sum, t) => {
+      const netAmount = (t.amount || 0) - (t.pipulse_fee || 0);
+      return sum + netAmount;
+    }, 0);
 
     const weeklyEarnings = transactions
-      .filter(t => {
-        const date = new Date(t.timestamp);
-        const today = new Date();
-        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-        return date >= weekAgo && t.transaction_type === 'payment';
-      })
-      .reduce((sum, t) => sum + t.amount, 0);
+      .filter(t => (t.created_at || '') >= sevenDaysAgo)
+      .reduce((sum, t) => {
+        const netAmount = (t.amount || 0) - (t.pipulse_fee || 0);
+        return sum + netAmount;
+      }, 0);
+
+    const dailyEarnings = transactions
+      .filter(t => (t.created_at || '') >= oneDayAgo)
+      .reduce((sum, t) => {
+        const netAmount = (t.amount || 0) - (t.pipulse_fee || 0);
+        return sum + netAmount;
+      }, 0);
+
+    const submissions = await getWorkerSubmissions(userId);
 
     return {
-      dailyEarnings,
-      weeklyEarnings,
-      totalEarnings: user.total_earnings || 0,
-      tasksCompleted: user.total_tasks_completed || 0,
+      dailyEarnings: parseFloat(dailyEarnings.toFixed(2)),
+      weeklyEarnings: parseFloat(weeklyEarnings.toFixed(2)),
+      totalEarnings: parseFloat(totalEarnings.toFixed(2)),
+      tasksCompleted: transactions.length, // Count of completed transactions
       currentStreak: user.current_streak || 0,
       level: user.level || 'Newcomer',
       availableTasksCount: submissions.filter(s => s.submission_status === 'pending').length,
