@@ -279,7 +279,7 @@ export async function POST(request: NextRequest) {
         }
 
         // ====================================================================
-        // STEP 6: Update task slots remaining
+        // STEP 6: Update task slots remaining (never go below 0)
         // ====================================================================
         if (taskId) {
           console.log(`\n🎯 [STEP 6] Updating task slots for: ${taskId}`);
@@ -287,7 +287,7 @@ export async function POST(request: NextRequest) {
           // First fetch current slots
           const { data: taskData } = await supabaseAdmin
             .from('tasks')
-            .select('slots_remaining')
+            .select('slots_remaining, task_status')
             .eq('id', taskId)
             .maybeSingle();
 
@@ -297,10 +297,15 @@ export async function POST(request: NextRequest) {
               console.warn(`⚠️ [STEP 6] No slots remaining for task, skipping decrement`);
             } else {
               const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
+              
+              // BUG FIX: When slots reach 0, set task status to 'full'
+              const newTaskStatus = newSlotsRemaining === 0 ? 'full' : taskData.task_status;
+              
               const { error: updateSlotsError } = await supabaseAdmin
                 .from('tasks')
                 .update({
                   slots_remaining: newSlotsRemaining,
+                  task_status: newTaskStatus,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', taskId);
@@ -308,7 +313,11 @@ export async function POST(request: NextRequest) {
               if (updateSlotsError) {
                 console.error(`❌ [STEP 6] Failed to update slots:`, updateSlotsError);
               } else {
-                console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining`);
+                if (newSlotsRemaining === 0) {
+                  console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining - Task status set to 'full'`);
+                } else {
+                  console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining`);
+                }
               }
             }
           } else {

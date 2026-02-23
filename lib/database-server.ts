@@ -839,3 +839,119 @@ export async function serverGetRisingStars(limit: number = 10) {
     return [];
   }
 }
+
+// ============================================================================
+// TASK SLOTS MANAGEMENT - SERVER-SIDE UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Fix negative slots in database (cleanup for existing data)
+ * Sets slots_remaining to 0 and task_status to 'full'
+ */
+export async function serverFixNegativeSlots() {
+  try {
+    const supabase = getServerSupabase();
+    
+    // Find all tasks with negative slots
+    const { data: negativeTasks, error: fetchError } = await supabase
+      .from('tasks')
+      .select('id, slots_remaining, task_status')
+      .lt('slots_remaining', 0);
+
+    if (fetchError) {
+      console.error('Error fetching negative slots tasks:', fetchError);
+      return { fixed: 0, error: fetchError.message };
+    }
+
+    if (!negativeTasks || negativeTasks.length === 0) {
+      console.log('✅ No negative slots found');
+      return { fixed: 0 };
+    }
+
+    console.log(`⚠️ Found ${negativeTasks.length} tasks with negative slots`);
+
+    // Update all to 0 and set status to 'full'
+    const { error: updateError } = await supabase
+      .from('tasks')
+      .update({
+        slots_remaining: 0,
+        task_status: 'full',
+        updated_at: new Date().toISOString(),
+      })
+      .lt('slots_remaining', 0);
+
+    if (updateError) {
+      console.error('Error fixing negative slots:', updateError);
+      return { fixed: 0, error: updateError.message };
+    }
+
+    console.log(`✅ Fixed ${negativeTasks.length} tasks with negative slots`);
+    return { fixed: negativeTasks.length };
+  } catch (error) {
+    console.error('Error in serverFixNegativeSlots:', error);
+    return { fixed: 0, error: String(error) };
+  }
+}
+
+/**
+ * Decrement task slots safely (never below 0, update status when full)
+ */
+export async function serverDecrementTaskSlots(taskId: string) {
+  try {
+    const supabase = getServerSupabase();
+
+    // Fetch current slots
+    const { data: taskData, error: fetchError } = await supabase
+      .from('tasks')
+      .select('slots_remaining, task_status')
+      .eq('id', taskId)
+      .maybeSingle();
+
+    if (fetchError || !taskData) {
+      console.error('Error fetching task for slot decrement:', fetchError);
+      return { success: false, error: fetchError?.message };
+    }
+
+    // Check if already at 0
+    if ((taskData.slots_remaining || 0) <= 0) {
+      console.warn(
+        `⚠️ Task ${taskId} already has ${taskData.slots_remaining} slots remaining`
+      );
+      return { success: false, reason: 'no_slots_available' };
+    }
+
+    // Decrement safely
+    const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
+    const newTaskStatus =
+      newSlotsRemaining === 0 ? 'full' : taskData.task_status;
+
+    const { error: updateError } = await supabase
+      .from('tasks')
+      .update({
+        slots_remaining: newSlotsRemaining,
+        task_status: newTaskStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', taskId);
+
+    if (updateError) {
+      console.error('Error decrementing slots:', updateError);
+      return { success: false, error: updateError.message };
+    }
+
+    console.log(
+      `✅ Slot decremented: ${newSlotsRemaining} remaining${
+        newSlotsRemaining === 0 ? ' - Task now FULL' : ''
+      }`
+    );
+    return {
+      success: true,
+      newSlotsRemaining,
+      taskNowFull: newSlotsRemaining === 0,
+    };
+  } catch (error) {
+    console.error('Error in serverDecrementTaskSlots:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
