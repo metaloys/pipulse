@@ -348,7 +348,7 @@ export async function POST(request: NextRequest) {
           }
 
           const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
-          const newTaskStatus = newSlotsRemaining === 0 ? 'full' : taskData.task_status;
+          const newTaskStatus = newSlotsRemaining === 0 ? 'completed' : taskData.task_status;
 
           const { error: updateSlotsError } = await supabaseAdmin
             .from('tasks')
@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
           }
 
           if (newSlotsRemaining === 0) {
-            console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining - Task status set to 'full'`);
+            console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining - Task status set to 'completed'`);
           } else {
             console.log(`✅ [STEP 6] Task slots updated: ${newSlotsRemaining} remaining`);
           }

@@ -846,7 +846,7 @@ export async function serverGetRisingStars(limit: number = 10) {
 
 /**
  * Fix negative slots in database (cleanup for existing data)
- * Sets slots_remaining to 0 and task_status to 'full'
+ * Sets slots_remaining to 0 and task_status to 'completed'
  */
 export async function serverFixNegativeSlots() {
   try {
@@ -870,12 +870,12 @@ export async function serverFixNegativeSlots() {
 
     console.log(`⚠️ Found ${negativeTasks.length} tasks with negative slots`);
 
-    // Update all to 0 and set status to 'full'
+    // Update all to 0 and set status to 'completed'
     const { error: updateError } = await supabase
       .from('tasks')
       .update({
         slots_remaining: 0,
-        task_status: 'full',
+        task_status: 'completed',
         updated_at: new Date().toISOString(),
       })
       .lt('slots_remaining', 0);
@@ -923,7 +923,7 @@ export async function serverDecrementTaskSlots(taskId: string) {
     // Decrement safely
     const newSlotsRemaining = Math.max(0, (taskData.slots_remaining || 1) - 1);
     const newTaskStatus =
-      newSlotsRemaining === 0 ? 'full' : taskData.task_status;
+      newSlotsRemaining === 0 ? 'completed' : taskData.task_status;
 
     const { error: updateError } = await supabase
       .from('tasks')
@@ -941,7 +941,7 @@ export async function serverDecrementTaskSlots(taskId: string) {
 
     console.log(
       `✅ Slot decremented: ${newSlotsRemaining} remaining${
-        newSlotsRemaining === 0 ? ' - Task now FULL' : ''
+        newSlotsRemaining === 0 ? ' - Task now completed (no slots remaining)' : ''
       }`
     );
     return {
