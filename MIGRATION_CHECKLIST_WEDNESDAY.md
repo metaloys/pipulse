@@ -1,13 +1,15 @@
-# 🔄 WEDNESDAY MIGRATION CHECKLIST
+# 🔄 WEDNESDAY MIGRATION CHECKLIST - OPTION A CONFIRMED
 
 **Date:** Wednesday, February 25, 2026  
-**Time:** Morning  
+**Time:** Morning (9 AM)  
 **Branch:** `hybrid-rebuild`  
 **Task:** Run Prisma schema migration  
+**Decision:** Option A - Accept data loss, proceed with clean schema  
+**Status:** ✅ APPROVED AND LOCKED IN
 
 ---
 
-## ✅ Pre-Migration Checklist
+## ✅ Pre-Migration Verification
 
 Before running migration, verify:
 
@@ -18,7 +20,11 @@ Before running migration, verify:
   - [x] piWallet confirmed nullable
 - [x] All files committed to hybrid-rebuild branch
 - [x] Documentation complete
-- [x] User approval obtained
+- [x] User approval obtained: **OPTION A CONFIRMED**
+- [x] Data impact understood: Old testnet data will be orphaned (acceptable)
+- [x] Legacy user IDs documented for Week 2 recreation:
+  - aloysmet: b934d200-8c68-4080-b8a4-85ced0da9043
+  - judith250: b292cc23-f83b-48f0-bcee-37e1550b8418
 
 ---
 
@@ -30,6 +36,8 @@ npx prisma migrate dev --name init_schema
 ```
 
 **Note:** Run this command in terminal at 9 AM Wednesday morning
+
+**Important:** This migration will create new Prisma tables. Old testnet data (2 users, 3 transactions, 5 submissions) will remain in the database but become orphaned - no longer accessible to the app. This is intentional and acceptable (Option A confirmed).
 
 ---
 
