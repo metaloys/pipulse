@@ -11,8 +11,7 @@ import { CreateTaskModal } from '@/components/create-task-modal';
 import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
 import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById, updateTask, switchUserRole } from '@/lib/database';
-import { mockUserStats } from '@/lib/mock-data';
-import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry } from '@/lib/types';
+import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry, UserStats } from '@/lib/types';
 import { 
   Coins, 
   CheckCircle, 
@@ -22,6 +21,17 @@ import {
   Plus,
 } from 'lucide-react';
 
+// Empty real stats (not mock) - shows 0 values while loading
+const EMPTY_STATS: UserStats = {
+  dailyEarnings: 0,
+  weeklyEarnings: 0,
+  totalEarnings: 0,
+  tasksCompleted: 0,
+  currentStreak: 0,
+  level: 'Newcomer',
+  availableTasksCount: 0,
+};
+
 export default function HomePage() {
   const { userData } = usePiAuth();
   
@@ -30,7 +40,7 @@ export default function HomePage() {
   const [tasks, setTasks] = useState<DatabaseTask[]>([]);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [employerTasks, setEmployerTasks] = useState<DatabaseTask[]>([]);
-  const [userStats, setUserStats] = useState(mockUserStats);
+  const [userStats, setUserStats] = useState<UserStats>(EMPTY_STATS);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<DatabaseTask | null>(null);
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
