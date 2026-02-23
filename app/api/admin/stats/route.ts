@@ -27,14 +27,30 @@ function getSupabaseClient() {
     throw new Error('Missing Supabase configuration');
   }
 
-  return createClient(url, key);
+  try {
+    const client = createClient(url, key);
+    console.log('✅ [INIT] Supabase client created successfully');
+    return client;
+  } catch (err) {
+    console.error('❌ [INIT] Failed to create Supabase client:', err instanceof Error ? err.message : err);
+    throw err;
+  }
 }
 
 export async function GET(request: NextRequest) {
   try {
     console.log('📊 [ADMIN STATS] Starting stats collection...');
+    console.log('📊 [ADMIN STATS] Environment check:');
+    console.log('   - SUPABASE_URL exists:', !!process.env.SUPABASE_URL);
+    console.log('   - SUPABASE_SERVICE_ROLE_KEY exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
     
-    const supabase = getSupabaseClient();
+    let supabase;
+    try {
+      supabase = getSupabaseClient();
+    } catch (initErr) {
+      console.error('❌ [ADMIN STATS] Failed at getSupabaseClient:', initErr instanceof Error ? initErr.message : initErr);
+      throw initErr;
+    }
     console.log('✅ [ADMIN STATS] Supabase client initialized');
 
     // Get total commission (sum of all pipulse_fee)
