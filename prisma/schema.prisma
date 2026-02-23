@@ -185,6 +185,7 @@ model Submission {
   revisionRequestedAt DateTime?
   resubmittedAt     DateTime?
   adminNotes        String?         @db.Text
+  acceptedAt        DateTime?       // When worker accepted task and slot lock started
   submittedAt       DateTime        @default(now())
   reviewedAt        DateTime?
   autoApproved      Boolean         @default(false)
@@ -380,7 +381,7 @@ model PlatformSettings {
   maxTaskTitle            Int             @default(100)
   slotLockMinutes         Int             @default(120) // 2 hours default
   autoApprovalHours       Int             @default(48)
-  maxRevisionAttempts     Int             @default(3)
+  maxRevisionAttempts     Int             @default(1)  // Workers get ONE revision opportunity only
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
 }
