@@ -7,10 +7,10 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "seed": "ts-node --transpile-only prisma/seed.ts"
+    "seed": "node seed-data.js"
   },
   "prisma": {
-    "seed": "ts-node --transpile-only prisma/seed.ts"
+    "seed": "node seed-data.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -46,6 +46,7 @@
     "@trpc/react-query": "^11.10.0",
     "@trpc/server": "^11.10.0",
     "autoprefixer": "^10.4.20",
+    "better-sqlite3": "^12.6.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",

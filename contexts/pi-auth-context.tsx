@@ -9,7 +9,7 @@ import React, {
 } from "react";
 import { PI_NETWORK_CONFIG, BACKEND_URLS } from "@/lib/system-config";
 import { api, setApiAuthToken } from "@/lib/api";
-import { createOrUpdateUserOnAuth } from "@/lib/database";
+import { trpcClient } from "@/lib/trpc/client";
 import {
   initializeGlobalPayment,
   checkIncompletePayments,
@@ -77,6 +77,7 @@ interface PiAuthContextType {
   hasError: boolean;
   piAccessToken: string | null;
   userData: LoginDTO | null;
+  user: any | null; // Full user object from tRPC with id, piUsername, userRole, level, totalEarnings, status
   error: string | null;
   reinitialize: () => Promise<void>;
   appId: string | null;
@@ -237,6 +238,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   const [hasError, setHasError] = useState(false);
   const [piAccessToken, setPiAccessToken] = useState<string | null>(null);
   const [userData, setUserData] = useState<LoginDTO | null>(null);
+  const [user, setUser] = useState<any | null>(null); // Full user object from tRPC
   const [error, setError] = useState<string | null>(null);
   const [appId, setAppId] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
@@ -286,18 +288,45 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
 
     const userData = await loginToBackend(accessToken, appId);
 
-    // Auto-create or update user in database
+    // Call tRPC createUser endpoint to create/get user from SQLite database
     try {
-      await createOrUpdateUserOnAuth(userData.id, userData.username);
-    } catch (error) {
-      console.error("Failed to create/update user in database:", error);
-      // Don't block authentication if user creation fails
-    }
+      console.log(`📝 Creating/fetching user via tRPC with piUid: ${userData.id}, piUsername: ${userData.username}`);
+      
+      const createUserResult = await trpcClient.auth.createUser.mutate({
+        piUid: userData.id,           // Pi Network user ID (immutable)
+        piUsername: userData.username, // Pi Network username (can change)
+      });
 
-    setPiAccessToken(accessToken);
-    setApiAuthToken(accessToken);
-    setUserData(userData);
-    setAppId(userData.app_id);
+      if (createUserResult.success && createUserResult.user) {
+        console.log(`✅ User created/fetched successfully:`, {
+          userId: createUserResult.user.id,
+          piUid: createUserResult.user.piUid,
+          piUsername: createUserResult.user.piUsername,
+          userRole: createUserResult.user.userRole,
+          level: createUserResult.user.level,
+          totalEarnings: createUserResult.user.totalEarnings,
+          status: createUserResult.user.status,
+          isNew: createUserResult.isNew,
+        });
+
+        // Store both the Pi user data and the full user object from database
+        setPiAccessToken(accessToken);
+        setApiAuthToken(accessToken);
+        setUserData(userData);
+        setUser(createUserResult.user); // Store full user object for accessing user.id, role, etc.
+        setAppId(userData.app_id);
+      } else {
+        throw new Error('Failed to create/fetch user from database');
+      }
+    } catch (error) {
+      console.error("Failed to create/fetch user in tRPC:", error);
+      // Don't block authentication if user creation fails - let app continue
+      // But log the error for debugging
+      setPiAccessToken(accessToken);
+      setApiAuthToken(accessToken);
+      setUserData(userData);
+      setAppId(userData.app_id);
+    }
   };
 
   const getErrorMessage = (error: unknown): string => {
@@ -439,6 +468,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     hasError,
     piAccessToken,
     userData,
+    user,
     error,
     reinitialize: initializePiAndAuthenticate,
     appId,

@@ -10,6 +10,7 @@ import { EmployerDashboard } from '@/components/employer-dashboard';
 import { CreateTaskModal } from '@/components/create-task-modal';
 import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
+import { trpcClient } from '@/lib/trpc/client';
 import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById, updateTask, switchUserRole } from '@/lib/database';
 import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry, UserStats } from '@/lib/types';
 import { 
@@ -33,14 +34,26 @@ const EMPTY_STATS: UserStats = {
 };
 
 export default function HomePage() {
-  const { userData } = usePiAuth();
+  const { userData, user } = usePiAuth();
   
-  const [userRole, setUserRole] = useState<UserRole>('worker');
+  // Get userRole from tRPC user object if available, otherwise default to 'worker'
+  const [userRole, setUserRole] = useState<UserRole>((user?.userRole as UserRole) || 'worker');
   const [selectedCategory, setSelectedCategory] = useState<TaskCategory | 'all'>('all');
   const [tasks, setTasks] = useState<DatabaseTask[]>([]);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [employerTasks, setEmployerTasks] = useState<DatabaseTask[]>([]);
-  const [userStats, setUserStats] = useState<UserStats>(EMPTY_STATS);
+  
+  // Initialize userStats from tRPC user object
+  const [userStats, setUserStats] = useState<UserStats>({
+    dailyEarnings: 0,
+    weeklyEarnings: 0,
+    totalEarnings: user?.totalEarnings || 0,
+    tasksCompleted: user?.totalTasksCompleted || 0,
+    currentStreak: user?.currentStreak || 0,
+    level: user?.level || 'NEWCOMER',
+    availableTasksCount: 0,
+  });
+  
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<DatabaseTask | null>(null);
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
@@ -49,12 +62,20 @@ export default function HomePage() {
   // Load user's current role from database
   useEffect(() => {
     const loadUserRole = async () => {
+      // If we have the full user object from tRPC, use it directly
+      if (user?.id && user?.userRole) {
+        console.log('📋 User role from tRPC context:', user.userRole);
+        setUserRole(user.userRole as UserRole);
+        return;
+      }
+      
+      // Fallback for old flow (if needed)
       if (userData?.id) {
         try {
-          const user = await getUserById(userData.id);
-          if (user) {
-            console.log('📋 User role from database:', user.user_role);
-            setUserRole(user.user_role);
+          const fetchedUser = await getUserById(userData.id);
+          if (fetchedUser) {
+            console.log('📋 User role from database:', fetchedUser.user_role);
+            setUserRole(fetchedUser.user_role);
           }
         } catch (error) {
           console.error('Error loading user role:', error);
@@ -62,7 +83,7 @@ export default function HomePage() {
       }
     };
     loadUserRole();
-  }, [userData?.id]);
+  }, [user, userData?.id]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -129,7 +150,7 @@ export default function HomePage() {
   }, [userData?.id, userRole]);
 
   const handleRoleSwitch = async () => {
-    if (!userData?.id || isRoleSwitching) return;
+    if (!user?.id || isRoleSwitching) return;
 
     setIsRoleSwitching(true);
     const newRole = userRole === 'worker' ? 'employer' : 'worker';
@@ -137,11 +158,15 @@ export default function HomePage() {
     try {
       console.log(`🔄 Switching user role from ${userRole} to ${newRole}...`);
 
-      const result = await switchUserRole(userData.id, newRole);
+      // Call tRPC switchRole endpoint
+      const result = await trpcClient.auth.switchRole.mutate({
+        userId: user.id,
+        newRole: newRole as 'WORKER' | 'EMPLOYER',
+      });
 
-      if (result) {
-        console.log(`✅ User role updated to ${newRole}:`, result.user_role);
-        setUserRole(newRole);
+      if (result.success && result.user) {
+        console.log(`✅ User role updated to ${newRole}:`, result.user.userRole);
+        setUserRole(newRole as UserRole);
 
         // Clear employer tasks if switching to worker
         if (newRole === 'worker') {
