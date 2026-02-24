@@ -12,8 +12,7 @@
  * Run this after: npx prisma migrate dev --name init_schema
  */
 
-import { PrismaClient } from '@prisma/client'
-import { Decimal } from '@prisma/client/runtime/library'
+const { PrismaClient } = require('@prisma/client')
 
 const prisma = new PrismaClient()
 
@@ -27,7 +26,7 @@ async function seed() {
         piUsername: 'testworker1',
         userRole: 'WORKER',
         status: 'ACTIVE',
-        totalEarnings: new Decimal('0'),
+        totalEarnings: 0,
         totalTasksCompleted: 0,
       },
     })
@@ -39,7 +38,7 @@ async function seed() {
         piUsername: 'testemployer1',
         userRole: 'EMPLOYER',
         status: 'ACTIVE',
-        totalEarnings: new Decimal('0'),
+        totalEarnings: 0,
         totalTasksCompleted: 0,
       },
     })
@@ -55,7 +54,7 @@ async function seed() {
           'Download the app, install it, test all features, and provide feedback',
         category: 'APP_TESTING',
         proofType: 'TEXT',
-        piReward: new Decimal('5.5'),
+        piReward: 5.5,
         timeEstimate: 60,
         deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
         slotsAvailable: 3,
@@ -74,7 +73,7 @@ async function seed() {
         autoApprovalHours: 48,
         slotLockMinutes: 120,
         maxRevisionAttempts: 1,
-        commissionRate: new Decimal('15'),
+        commissionRate: 15,
       },
     })
     console.log('✅ Created platform settings')

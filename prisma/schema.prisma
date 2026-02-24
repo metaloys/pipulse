@@ -6,8 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
 }
 
 // ============================================================================
@@ -23,7 +22,7 @@ model User {
   currentStreak       Int             @default(0)
   longestStreak       Int             @default(0)
   lastActiveDate      DateTime        @default(now())
-  totalEarnings       Decimal         @default(0) @db.Numeric(15, 8)
+  totalEarnings       Decimal         @default(0)
   totalTasksCompleted Int             @default(0)
   status              UserStatus      @default(ACTIVE)
   createdAt           DateTime        @default(now())
@@ -69,12 +68,12 @@ enum UserStatus {
 
 model Task {
   id              String          @id @default(cuid())
-  title           String          @db.VarChar(100)
-  description     String          @db.Text
+  title           String         
+  description     String         
   category        TaskCategory
-  instructions    String          @db.Text
+  instructions    String         
   proofType       ProofType
-  piReward        Decimal         @db.Numeric(15, 8)
+  piReward        Decimal        
   timeEstimate    Int             // In minutes
   deadline        DateTime
   slotsAvailable  Int
@@ -135,10 +134,10 @@ model TaskVersion {
   id          String          @id @default(cuid())
   taskId      String
   task        Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  title       String?         @db.VarChar(100)
-  description String?         @db.Text
-  instructions String?        @db.Text
-  piReward    Decimal?        @db.Numeric(15, 8)
+  title       String?        
+  description String?        
+  instructions String?       
+  piReward    Decimal?       
   slotsAvailable Int?
   deadline    DateTime?
   changedBy   String          // User ID who made the change
@@ -175,16 +174,16 @@ model Submission {
   task              Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
   workerId          String
   worker            User            @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  proofContent      String          @db.Text
+  proofContent      String         
   submissionType    ProofType
   status            SubmissionStatus @default(SUBMITTED)
-  agreedReward      Decimal         @db.Numeric(15, 8) // Locked price at acceptance
-  rejectionReason   String?         @db.Text
+  agreedReward      Decimal         // Locked price at acceptance
+  rejectionReason   String?        
   revisionNumber    Int             @default(0)
-  revisionReason    String?         @db.Text
+  revisionReason    String?        
   revisionRequestedAt DateTime?
   resubmittedAt     DateTime?
-  adminNotes        String?         @db.Text
+  adminNotes        String?        
   acceptedAt        DateTime?       // When worker accepted task and slot lock started
   submittedAt       DateTime        @default(now())
   reviewedAt        DateTime?
@@ -223,8 +222,8 @@ model Transaction {
   sender          User?           @relation("sender", fields: [senderId], references: [id], onDelete: SetNull)
   receiverId      String?
   receiver        User?           @relation("receiver", fields: [receiverId], references: [id], onDelete: SetNull)
-  amount          Decimal         @db.Numeric(15, 8)
-  pipulseFee      Decimal         @db.Numeric(15, 8) // Commission taken
+  amount          Decimal        
+  pipulseFee      Decimal         // Commission taken
   taskId          String?
   task            Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
   submissionId    String?         @unique
@@ -266,12 +265,12 @@ model FailedCompletion {
   id            String          @id @default(cuid())
   submissionId  String
   workerId      String
-  amount        Decimal         @db.Numeric(15, 8)
-  error         String          @db.Text
+  amount        Decimal        
+  error         String         
   attempts      Int             @default(1)
   nextRetry     DateTime?
   resolvedAt    DateTime?
-  resolution    String?         @db.Text
+  resolution    String?        
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -291,11 +290,11 @@ model Dispute {
   task          Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
   workerId      String
   worker        User            @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  reason        String          @db.Text
-  evidence      String?         @db.Text
+  reason        String         
+  evidence      String?        
   status        DisputeStatus   @default(PENDING)
   ruling        DisputeRuling?
-  adminNotes    String?         @db.Text
+  adminNotes    String?        
   resolvedAt    DateTime?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -323,7 +322,7 @@ model Notification {
   id          String              @id @default(cuid())
   userId      String
   title       String
-  body        String              @db.Text
+  body        String             
   actionUrl   String?
   type        NotificationType
   read        Boolean             @default(false)
@@ -374,7 +373,7 @@ model AuditLog {
 
 model PlatformSettings {
   id                      String          @id @default(cuid())
-  commissionRate          Decimal         @default(15) @db.Numeric(5, 2) // Percentage: 0-100
+  commissionRate          Decimal         @default(15) // Percentage: 0-100
   maintenanceMode         Boolean         @default(false)
   maxTaskDeadlineDays     Int             @default(30)
   minTaskTitle            Int             @default(10)
@@ -393,6 +392,7 @@ model PlatformSettings {
 model Streak {
   id                  String          @id @default(cuid())
   userId              String          @unique
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   currentStreak       Int             @default(0)
   longestStreak       Int             @default(0)
   lastActiveDate      DateTime        @default(now())
