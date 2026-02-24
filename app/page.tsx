@@ -113,19 +113,29 @@ export default function HomePage() {
         }));
         setLeaderboardEntries(formattedLeaderboard);
 
-        // Fetch real user stats if logged in
-        if (userData?.id) {
+        // Fetch real user stats - prefer tRPC user object if available
+        if (user?.id) {
+          console.log('📊 User stats loaded from tRPC context:', {
+            userId: user.id,
+            totalEarnings: user.totalEarnings,
+            tasksCompleted: user.totalTasksCompleted,
+            level: user.level,
+            currentStreak: user.currentStreak,
+          });
+          setUserStats({
+            dailyEarnings: 0, // This would need separate calculation
+            weeklyEarnings: 0, // This would need separate calculation
+            totalEarnings: user.totalEarnings || 0,
+            tasksCompleted: user.totalTasksCompleted || 0,
+            level: user.level || 'NEWCOMER',
+            currentStreak: user.currentStreak || 0,
+            availableTasksCount: availableTasks.length,
+          });
+        } else if (userData?.id) {
+          // Fallback to old method if tRPC user not available
           const realStats = await getUserStats(userData.id);
           if (realStats) {
-            console.log('📊 User stats loaded from database:', {
-              userId: userData.id,
-              dailyEarnings: realStats.dailyEarnings,
-              weeklyEarnings: realStats.weeklyEarnings,
-              totalEarnings: realStats.totalEarnings,
-              tasksCompleted: realStats.tasksCompleted,
-              level: realStats.level,
-              currentStreak: realStats.currentStreak,
-            });
+            console.log('📊 User stats loaded from database:', realStats);
             setUserStats(realStats);
           } else {
             console.warn('⚠️ No stats returned for user:', userData.id);
@@ -135,7 +145,10 @@ export default function HomePage() {
         }
 
         // If user is an employer, load their tasks
-        if (userData?.id && userRole === 'employer') {
+        if (user?.id && userRole === 'employer') {
+          const userEmployerTasks = await getTasksByEmployer(user.id);
+          setEmployerTasks(userEmployerTasks);
+        } else if (userData?.id && userRole === 'employer') {
           const userEmployerTasks = await getTasksByEmployer(userData.id);
           setEmployerTasks(userEmployerTasks);
         }
@@ -147,7 +160,7 @@ export default function HomePage() {
     };
 
     loadData();
-  }, [userData?.id, userRole]);
+  }, [userData?.id, user?.id, userRole]);
 
   const handleRoleSwitch = async () => {
     if (!user?.id || isRoleSwitching) return;
@@ -189,20 +202,18 @@ export default function HomePage() {
 
   const handleSubmitTask = async (taskId: string, proof: string, submissionType: 'text' | 'photo' | 'audio' | 'file') => {
     try {
-      // Get the worker ID from Pi Auth context
-      if (!userData?.id) {
+      // Get the worker ID from tRPC user context (preferred) or Pi Auth context
+      const workerId = user?.id || userData?.id;
+      if (!workerId) {
         throw new Error('User not authenticated. Please login with Pi Network.');
       }
 
-      const workerId = userData.id;
-      
-      console.log(`📝 Submitting task proof for task: ${taskId}`);
-      
-      // Get the current task to capture agreed_reward at submission time
-      const currentTask = tasks.find(t => t.id === taskId);
-      if (!currentTask) {
+      const taskData = tasks.find(t => t.id === taskId);
+      if (!taskData) {
         throw new Error('Task not found');
       }
+      
+      console.log(`📝 Submitting task proof for task: ${taskId}`);
       
       // 1. Create the submission record with agreed_reward for price protection
       const submission = await submitTask({
@@ -212,7 +223,7 @@ export default function HomePage() {
         submission_type: submissionType,
         submission_status: 'submitted',
         rejection_reason: null,
-        agreed_reward: currentTask.pi_reward, // Store the price worker agreed to
+        agreed_reward: taskData.pi_reward, // Store the price worker agreed to
         submitted_at: new Date().toISOString(),
         reviewed_at: null,
         created_at: new Date().toISOString(),
@@ -226,16 +237,16 @@ export default function HomePage() {
       console.log(`✅ Task submitted successfully with ID: ${submission.id}`);
       
       // 2. Decrement the slots_remaining for this task
-      const newSlotsRemaining = Math.max(0, currentTask.slots_remaining - 1);
+      const newSlotsRemaining = Math.max(0, taskData.slots_remaining - 1);
       await updateTask(taskId, {
         slots_remaining: newSlotsRemaining,
       });
-      console.log(`📉 Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
+      console.log(`📉 Task slots updated: ${taskData.slots_remaining} → ${newSlotsRemaining}`);
       
       // 3. Refresh tasks after submission
       const updatedTasks = await getAllTasks();
-      const availableTasks = userRole === 'worker' && userData?.id 
-        ? updatedTasks.filter(t => t.employer_id !== userData.id)
+      const availableTasks = userRole === 'worker' && workerId
+        ? updatedTasks.filter(t => t.employer_id !== workerId)
         : updatedTasks;
       setTasks(availableTasks);
       
