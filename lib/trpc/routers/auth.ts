@@ -14,27 +14,42 @@ import { prisma } from '@/lib/db'
 export const authRouter = router({
   /**
    * Create a new user from Pi authentication
-   * Input: piUsername from Pi auth callback
+   * Input: piUid (unique identifier from Pi Network), piUsername
    * Output: User object with ID, role, status
+   * 
+   * Logic:
+   * 1. Check if user exists by piUid
+   * 2. If exists, return existing user
+   * 3. If not exists, create new user and Streak record
    */
   createUser: publicProcedure
     .input(
       z.object({
-        piUsername: z.string().min(1).max(255),
-        piWallet: z.string().optional().nullable(),
+        piUid: z.string().min(1).max(255).describe('Unique Pi Network user ID'),
+        piUsername: z.string().min(1).max(255).describe('Pi Network username'),
       })
     )
     .mutation(async ({ input }) => {
       try {
-        // Check if user already exists
+        // Validate input
+        if (!input.piUid || !input.piUsername) {
+          throw new Error('piUid and piUsername are required')
+        }
+
+        // Check if user already exists by piUid
         const existingUser = await prisma.user.findUnique({
-          where: { piUsername: input.piUsername },
+          where: { piUsername: input.piUid },
+          include: {
+            streak: true,
+          },
         })
 
         if (existingUser) {
+          console.log(`User already exists: ${input.piUid}`)
           return {
             success: true,
             user: existingUser,
+            isNew: false,
             message: 'User already exists',
           }
         }
@@ -43,7 +58,6 @@ export const authRouter = router({
         const user = await prisma.user.create({
           data: {
             piUsername: input.piUsername,
-            piWallet: input.piWallet || null,
             userRole: 'WORKER',
             level: 'NEWCOMER',
             status: 'ACTIVE',
@@ -52,10 +66,13 @@ export const authRouter = router({
             longestStreak: 0,
             lastActiveDate: new Date(),
           },
+          include: {
+            streak: true,
+          },
         })
 
-        // Create default Streak record
-        await prisma.streak.create({
+        // Create default Streak record for the new user
+        const streak = await prisma.streak.create({
           data: {
             userId: user.id,
             currentStreak: 0,
@@ -63,14 +80,23 @@ export const authRouter = router({
           },
         })
 
+        console.log(`New user created: ${user.id}`)
+
         return {
           success: true,
-          user,
+          user: {
+            ...user,
+            streak,
+          },
+          isNew: true,
           message: 'User created successfully',
         }
       } catch (error) {
         console.error('Error creating user:', error)
-        throw new Error('Failed to create user')
+        if (error instanceof Error) {
+          throw new Error(`Failed to create user: ${error.message}`)
+        }
+        throw new Error('Failed to create user: Unknown error')
       }
     }),
 
