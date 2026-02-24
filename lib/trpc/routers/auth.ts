@@ -9,6 +9,7 @@
 
 import { router, publicProcedure } from '../trpc'
 import { z } from 'zod'
+import { prisma } from '@/lib/db'
 
 export const authRouter = router({
   /**
@@ -24,13 +25,52 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      // Placeholder - implement in Week 2
-      // TODO: Create user in database with WORKER role (can switch later)
-      // TODO: Create default Streak record
-      // TODO: Set up session
-      return {
-        success: true,
-        message: 'User creation not yet implemented - Week 2 task',
+      try {
+        // Check if user already exists
+        const existingUser = await prisma.user.findUnique({
+          where: { piUsername: input.piUsername },
+        })
+
+        if (existingUser) {
+          return {
+            success: true,
+            user: existingUser,
+            message: 'User already exists',
+          }
+        }
+
+        // Create new user with WORKER role by default
+        const user = await prisma.user.create({
+          data: {
+            piUsername: input.piUsername,
+            piWallet: input.piWallet || null,
+            userRole: 'WORKER',
+            level: 'NEWCOMER',
+            status: 'ACTIVE',
+            totalEarnings: 0,
+            currentStreak: 0,
+            longestStreak: 0,
+            lastActiveDate: new Date(),
+          },
+        })
+
+        // Create default Streak record
+        await prisma.streak.create({
+          data: {
+            userId: user.id,
+            currentStreak: 0,
+            longestStreak: 0,
+          },
+        })
+
+        return {
+          success: true,
+          user,
+          message: 'User created successfully',
+        }
+      } catch (error) {
+        console.error('Error creating user:', error)
+        throw new Error('Failed to create user')
       }
     }),
 
@@ -38,27 +78,70 @@ export const authRouter = router({
    * Get the current authenticated user
    * Used on app load to restore session
    */
-  getCurrentUser: publicProcedure.query(async () => {
-    // Placeholder - implement in Week 2
-    // TODO: Get user from session/auth context
-    // TODO: Include current role, status, earnings
-    return null
-  }),
+  getCurrentUser: publicProcedure
+    .input(z.object({ userId: z.string() }).optional())
+    .query(async ({ input }) => {
+      if (!input?.userId) {
+        return null
+      }
+
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: input.userId },
+          include: {
+            streak: true,
+          },
+        })
+
+        return user
+      } catch (error) {
+        console.error('Error fetching user:', error)
+        return null
+      }
+    }),
 
   /**
    * Switch user between WORKER and EMPLOYER roles
    * Validates user has permission, updates session
    */
   switchRole: publicProcedure
-    .input(z.enum(['WORKER', 'EMPLOYER']))
+    .input(
+      z.object({
+        userId: z.string(),
+        newRole: z.enum(['WORKER', 'EMPLOYER']),
+      })
+    )
     .mutation(async ({ input }) => {
-      // Placeholder - implement in Week 2
-      // TODO: Update user role in database
-      // TODO: Update session
-      // TODO: Return new user object
-      return {
-        success: true,
-        message: 'Role switching not yet implemented - Week 2 task',
+      try {
+        // Get user
+        const user = await prisma.user.findUnique({
+          where: { id: input.userId },
+        })
+
+        if (!user) {
+          throw new Error('User not found')
+        }
+
+        // Update role
+        const updatedUser = await prisma.user.update({
+          where: { id: input.userId },
+          data: {
+            userRole: input.newRole,
+            updatedAt: new Date(),
+          },
+          include: {
+            streak: true,
+          },
+        })
+
+        return {
+          success: true,
+          user: updatedUser,
+          message: `Switched to ${input.newRole} role`,
+        }
+      } catch (error) {
+        console.error('Error switching role:', error)
+        throw new Error('Failed to switch role')
       }
     }),
 })
