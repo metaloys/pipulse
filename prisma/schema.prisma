@@ -73,7 +73,7 @@ model Task {
   category        TaskCategory
   instructions    String         
   proofType       ProofType
-  piReward        Decimal        
+  piReward        Decimal
   timeEstimate    Int             // In minutes
   deadline        DateTime
   slotsAvailable  Int
@@ -177,7 +177,7 @@ model Submission {
   proofContent      String         
   submissionType    ProofType
   status            SubmissionStatus @default(SUBMITTED)
-  agreedReward      Decimal         // Locked price at acceptance
+  agreedReward      Decimal
   rejectionReason   String?        
   revisionNumber    Int             @default(0)
   revisionReason    String?        
@@ -222,8 +222,8 @@ model Transaction {
   sender          User?           @relation("sender", fields: [senderId], references: [id], onDelete: SetNull)
   receiverId      String?
   receiver        User?           @relation("receiver", fields: [receiverId], references: [id], onDelete: SetNull)
-  amount          Decimal        
-  pipulseFee      Decimal         // Commission taken
+  amount          Decimal
+  pipulseFee      Decimal
   taskId          String?
   task            Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
   submissionId    String?         @unique
