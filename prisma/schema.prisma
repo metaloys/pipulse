@@ -42,6 +42,7 @@ model User {
   @@index([userRole])
   @@index([status])
   @@index([piUsername])
+  @@index([piUid])
 }
 
 enum UserRole {
