@@ -15,6 +15,7 @@ datasource db {
 
 model User {
   id                  String          @id @default(cuid())
+  piUid               String          @unique
   piUsername          String          @unique
   piWallet            String?         @unique
   userRole            UserRole        @default(WORKER)

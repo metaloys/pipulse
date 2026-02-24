@@ -18,15 +18,19 @@ export const authRouter = router({
    * Output: User object with ID, role, status
    * 
    * Logic:
-   * 1. Check if user exists by piUid
+   * 1. Check if user exists by piUid (unique Pi Network ID)
    * 2. If exists, return existing user
    * 3. If not exists, create new user and Streak record
+   * 
+   * CRITICAL: piUid is the only reliable identifier because:
+   * - Username can change
+   * - piUid never changes (Pi Network user's permanent ID)
    */
   createUser: publicProcedure
     .input(
       z.object({
-        piUid: z.string().min(1).max(255).describe('Unique Pi Network user ID'),
-        piUsername: z.string().min(1).max(255).describe('Pi Network username'),
+        piUid: z.string().min(1).max(255).describe('Unique Pi Network user ID (immutable)'),
+        piUsername: z.string().min(1).max(255).describe('Pi Network username (can change)'),
       })
     )
     .mutation(async ({ input }) => {
@@ -36,9 +40,9 @@ export const authRouter = router({
           throw new Error('piUid and piUsername are required')
         }
 
-        // Check if user already exists by piUid
+        // Check if user already exists by piUid (the ONLY reliable identifier)
         const existingUser = await prisma.user.findUnique({
-          where: { piUsername: input.piUid },
+          where: { piUid: input.piUid },
           include: {
             streak: true,
           },
@@ -57,6 +61,7 @@ export const authRouter = router({
         // Create new user with WORKER role by default
         const user = await prisma.user.create({
           data: {
+            piUid: input.piUid,
             piUsername: input.piUsername,
             userRole: 'WORKER',
             level: 'NEWCOMER',
@@ -80,7 +85,7 @@ export const authRouter = router({
           },
         })
 
-        console.log(`New user created: ${user.id}`)
+        console.log(`New user created: ${user.id} with piUid: ${input.piUid}`)
 
         return {
           success: true,
