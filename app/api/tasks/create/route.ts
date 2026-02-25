@@ -62,7 +62,7 @@ export async function POST(request: Request) {
           slotsRemaining: slotsAvailable,
           deadline: deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days default
           employerId: employerId,
-          taskStatus: 'AVAILABLE',
+          taskStatus: 'available',
           instructions: body.instructions || `Complete this ${category} task. Proof type: ${proofType}`,
           proofType: proofType,
           paymentId: paymentId || null,
@@ -90,7 +90,11 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (err) {
-    console.error('Error in POST /api/tasks/create:', err);
+    console.error('Task create error:', JSON.stringify({
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+      error: err,
+    }, null, 2));
     return Response.json(
       {
         error: 'Internal server error',
