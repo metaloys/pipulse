@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
     // Get total users count
     console.log('📥 [ADMIN STATS] Counting users...');
     const { count: totalUsers, error: usersError } = await supabase
-      .from('users')
+      .from('User')
       .select('*', { count: 'exact', head: true });
 
     if (usersError) {

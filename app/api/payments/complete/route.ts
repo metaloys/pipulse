@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
     if (taskId) {
       console.log(`\n👔 Fetching employer ID for task: ${taskId}`);
       const { data: taskData, error: taskError } = await supabaseAdmin
-        .from('tasks')
+        .from('Task')
         .select('employer_id')
         .eq('id', taskId)
         .maybeSingle();
@@ -254,7 +254,7 @@ export async function POST(request: NextRequest) {
           const newTasksCompleted = (userData.total_tasks_completed || 0) + 1;
 
           const { data: updatedUser, error: updateError } = await supabaseAdmin
-            .from('users')
+            .from('User')
             .update({
               total_earnings: newTotalEarnings,
               total_tasks_completed: newTasksCompleted,
@@ -356,7 +356,7 @@ export async function POST(request: NextRequest) {
           console.log(`\n🎯 [STEP 6] Preparing task slots update for: ${taskId}`);
 
           const { data: taskData } = await supabaseAdmin
-            .from('tasks')
+            .from('Task')
             .select('slots_remaining, task_status')
             .eq('id', taskId)
             .maybeSingle();
@@ -376,7 +376,7 @@ export async function POST(request: NextRequest) {
           const newTaskStatus = newSlotsRemaining === 0 ? 'completed' : taskData.task_status;
 
           const { error: updateSlotsError } = await supabaseAdmin
-            .from('tasks')
+            .from('Task')
             .update({
               slots_remaining: newSlotsRemaining,
               task_status: newTaskStatus,
