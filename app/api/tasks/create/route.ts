@@ -54,20 +54,20 @@ export async function POST(request: Request) {
         {
           title: title.trim(),
           description: description.trim(),
-          category,
-          pi_reward: piReward,
-          time_estimate: 60, // Default 60 minutes
+          category: category.toLowerCase(),
+          piReward: piReward,
+          timeEstimate: 60, // Default 60 minutes
           requirements: [],
-          slots_available: slotsAvailable,
-          slots_remaining: slotsAvailable,
+          slotsAvailable: slotsAvailable,
+          slotsRemaining: slotsAvailable,
           deadline: deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days default
-          employer_id: employerId,
-          task_status: 'available',
+          employerId: employerId,
+          taskStatus: 'AVAILABLE',
           instructions: body.instructions || `Complete this ${category} task. Proof type: ${proofType}`,
-          proof_type: proofType,
-          payment_id: paymentId || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          proofType: proofType,
+          paymentId: paymentId || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         },
       ])
       .select()
