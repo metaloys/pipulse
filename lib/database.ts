@@ -302,7 +302,7 @@ export async function deleteTask(taskId: string) {
 
   if (error) {
     console.error('Error deleting task:', error);
-    throw new Error('Failed to delete task');
+    return false; // Return false on error instead of throwing
   }
   return true;
 }
