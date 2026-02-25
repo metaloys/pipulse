@@ -1,53 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
 export async function POST(request: NextRequest) {
   try {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!url || !key) {
+      return NextResponse.json({ error: 'Missing env vars' }, { status: 500 });
+    }
+
+    const supabase = createClient(url, key);
     const { piUid, piUsername } = await request.json();
 
     if (!piUid || !piUsername) {
-      return NextResponse.json(
-        { error: 'Missing piUid or piUsername' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing piUid or piUsername' }, { status: 400 });
     }
 
-    const supabase = getSupabase();
-
-    // Check if user exists by id
-    const { data: existingById } = await supabase
+    // Check by id
+    const { data: byId } = await supabase
       .from('User')
       .select('*')
       .eq('id', piUid)
       .maybeSingle();
 
-    if (existingById) {
-      return NextResponse.json({ user: existingById }, { status: 200 });
+    if (byId) {
+      return NextResponse.json({ user: byId }, { status: 200 });
     }
 
-    // Check if user exists by username
-    const { data: existingByUsername } = await supabase
+    // Check by piUsername
+    const { data: byUsername } = await supabase
       .from('User')
       .select('*')
       .eq('piUsername', piUsername)
       .maybeSingle();
 
-    if (existingByUsername) {
-      return NextResponse.json({ user: existingByUsername }, { status: 200 });
+    if (byUsername) {
+      return NextResponse.json({ user: byUsername }, { status: 200 });
     }
 
-    // Create new user
-    const { data: newUser, error } = await supabase
+    // Create new user - include ALL required columns
+    const { data: newUser, error: insertError } = await supabase
       .from('User')
       .insert([{
         id: piUid,
+        piUid: piUid,
         piUsername: piUsername,
         userRole: 'worker',
         level: 'Newcomer',
@@ -59,20 +56,18 @@ export async function POST(request: NextRequest) {
       .select()
       .maybeSingle();
 
-    if (error) {
-      console.error('Error creating user:', error);
+    if (insertError) {
+      console.error('Insert error:', JSON.stringify(insertError));
       return NextResponse.json(
-        { error: error.message },
+        { error: insertError.message, details: insertError },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ user: newUser }, { status: 200 });
+
   } catch (error) {
-    console.error('Auth error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('Unexpected error:', String(error));
+    return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
