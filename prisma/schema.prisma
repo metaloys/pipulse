@@ -23,7 +23,7 @@ model User {
   currentStreak       Int             @default(0)
   longestStreak       Int             @default(0)
   lastActiveDate      DateTime        @default(now())
-  totalEarnings       Decimal         @default(0)
+  totalEarnings       Decimal         @default(0) @db.Decimal(15,8)
   totalTasksCompleted Int             @default(0)
   status              UserStatus      @default(ACTIVE)
   createdAt           DateTime        @default(now())
@@ -75,7 +75,7 @@ model Task {
   category        TaskCategory
   instructions    String         
   proofType       ProofType
-  piReward        Decimal
+  piReward        Decimal         @db.Decimal(15,8)
   timeEstimate    Int             // In minutes
   deadline        DateTime
   slotsAvailable  Int
@@ -139,7 +139,7 @@ model TaskVersion {
   title       String?        
   description String?        
   instructions String?       
-  piReward    Decimal?       
+  piReward    Decimal?       @db.Decimal(15,8)
   slotsAvailable Int?
   deadline    DateTime?
   changedBy   String          // User ID who made the change
@@ -179,7 +179,7 @@ model Submission {
   proofContent      String         
   submissionType    ProofType
   status            SubmissionStatus @default(SUBMITTED)
-  agreedReward      Decimal
+  agreedReward      Decimal         @db.Decimal(15,8)
   rejectionReason   String?        
   revisionNumber    Int             @default(0)
   revisionReason    String?        
@@ -224,8 +224,8 @@ model Transaction {
   sender          User?           @relation("sender", fields: [senderId], references: [id], onDelete: SetNull)
   receiverId      String?
   receiver        User?           @relation("receiver", fields: [receiverId], references: [id], onDelete: SetNull)
-  amount          Decimal
-  pipulseFee      Decimal
+  amount          Decimal         @db.Decimal(15,8)
+  pipulseFee      Decimal         @db.Decimal(5,2)
   taskId          String?
   task            Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
   submissionId    String?         @unique
@@ -267,7 +267,7 @@ model FailedCompletion {
   id            String          @id @default(cuid())
   submissionId  String
   workerId      String
-  amount        Decimal        
+  amount        Decimal         @db.Decimal(15,8)
   error         String         
   attempts      Int             @default(1)
   nextRetry     DateTime?
@@ -375,7 +375,7 @@ model AuditLog {
 
 model PlatformSettings {
   id                      String          @id @default(cuid())
-  commissionRate          Decimal         @default(15) // Percentage: 0-100
+  commissionRate          Decimal         @default(15) @db.Decimal(5,2) // Percentage: 0-100
   maintenanceMode         Boolean         @default(false)
   maxTaskDeadlineDays     Int             @default(30)
   minTaskTitle            Int             @default(10)
