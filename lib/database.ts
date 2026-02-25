@@ -325,7 +325,7 @@ export async function getTasksByEmployer(employerId: string) {
 
 export async function submitTask(submission: Omit<DatabaseTaskSubmission, 'id' | 'created_at' | 'updated_at'>) {
   const { data, error } = await supabase
-    .from('TaskSubmission')
+    .from('Submission')
     .insert([submission])
     .select()
     .maybeSingle();
@@ -339,7 +339,7 @@ export async function submitTask(submission: Omit<DatabaseTaskSubmission, 'id' |
 
 export async function getWorkerSubmissions(workerId: string) {
   const { data, error } = await supabase
-    .from('TaskSubmission')
+    .from('Submission')
     .select('*')
     .eq('workerId', workerId)
     .order('submittedAt', { ascending: false });
@@ -353,7 +353,7 @@ export async function getWorkerSubmissions(workerId: string) {
 
 export async function getTaskSubmissions(taskId: string) {
   const { data, error } = await supabase
-    .from('TaskSubmission')
+    .from('Submission')
     .select('*')
     .eq('taskId', taskId)
     .order('submittedAt', { ascending: false });
@@ -367,9 +367,9 @@ export async function getTaskSubmissions(taskId: string) {
 
 export async function approveSubmission(submissionId: string) {
   const { data, error } = await supabase
-    .from('TaskSubmission')
+    .from('Submission')
     .update({ 
-      submissionStatus: 'approved', 
+      status: 'APPROVED', 
       reviewedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     })
@@ -386,9 +386,9 @@ export async function approveSubmission(submissionId: string) {
 
 export async function rejectSubmission(submissionId: string, reason: string) {
   const { data, error } = await supabase
-    .from('TaskSubmission')
+    .from('Submission')
     .update({ 
-      submissionStatus: 'rejected', 
+      status: 'REJECTED', 
       rejectionReason: reason,
       reviewedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -690,7 +690,7 @@ export async function getPendingTransactions() {
   const { data, error } = await supabase
     .from('Transaction')
     .select('*')
-    .eq('transactionStatus', 'pending')
+    .eq('status', 'pending')
     .order('timestamp', { ascending: false });
 
   if (error) {
@@ -708,7 +708,7 @@ export async function updateTransactionStatus(transactionId: string, status: 'co
   const { data, error } = await supabase
     .from('Transaction')
     .update({ 
-      transactionStatus: status,
+      status: status,
       updatedAt: new Date().toISOString()
     })
     .eq('id', transactionId)
