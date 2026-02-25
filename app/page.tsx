@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
 import { trpcClient } from '@/lib/trpc/client';
 import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById, updateTask, switchUserRole } from '@/lib/database';
-import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry, UserStats } from '@/lib/types';
+import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry, UserStats, Task } from '@/lib/types';
 import { 
   Coins, 
   CheckCircle, 
@@ -74,8 +74,8 @@ export default function HomePage() {
         try {
           const fetchedUser = await getUserById(userData.id);
           if (fetchedUser) {
-            console.log('📋 User role from database:', fetchedUser.userRole);
-            setUserRole(fetchedUser.userRole);
+            console.log('📋 User role from database:', fetchedUser.user_role);
+            setUserRole(fetchedUser.user_role);
           }
         } catch (error) {
           console.error('Error loading user role:', error);
@@ -97,7 +97,7 @@ export default function HomePage() {
         // (a user shouldn't accept their own tasks)
         let availableTasks = tasksData;
         if (userRole === 'worker' && userData?.id) {
-          availableTasks = tasksData.filter(task => task.employerId !== userData.id);
+          availableTasks = tasksData.filter(task => task.employer_id !== userData.id);
           console.log(`📋 Filtered tasks: ${tasksData.length} total, ${availableTasks.length} available for worker (excluded ${tasksData.length - availableTasks.length} own tasks)`);
         }
         
@@ -182,8 +182,14 @@ export default function HomePage() {
     }
   };
 
-  const handleAcceptTask = (task: DatabaseTask) => {
-    setSelectedTask(task);
+  const handleAcceptTask = (task: DatabaseTask | Task) => {
+    // Only set if it's a DatabaseTask (has pi_reward property)
+    if ('pi_reward' in task) {
+      setSelectedTask(task as DatabaseTask);
+    } else {
+      // Convert Task to DatabaseTask or ignore
+      console.warn('Task does not have required DatabaseTask properties');
+    }
     setIsSubmissionModalOpen(true);
   };
 
@@ -212,11 +218,15 @@ export default function HomePage() {
         submission_type: submissionType,
         submission_status: 'submitted',
         rejection_reason: null,
-        agreed_reward: currentTask.piReward, // Store the price worker agreed to
-        submittedAt: new Date().toISOString(),
+        revision_number: 0,
+        revision_requested_reason: null,
+        revision_requested_at: null,
+        resubmitted_at: null,
+        employer_notes: null,
+        agreed_reward: currentTask.pi_reward, // Store the price worker agreed to
+        submitted_at: new Date().toISOString(),
         reviewed_at: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+
       });
 
       if (!submission) {
@@ -225,17 +235,17 @@ export default function HomePage() {
 
       console.log(`✅ Task submitted successfully with ID: ${submission.id}`);
       
-      // 2. Decrement the slotsRemaining for this task
-      const newSlotsRemaining = Math.max(0, currentTask.slotsRemaining - 1);
+      // 2. Decrement the slots_remaining for this task
+      const newSlotsRemaining = Math.max(0, currentTask.slots_remaining - 1);
       await updateTask(taskId, {
-        slotsRemaining: newSlotsRemaining,
+        slots_remaining: newSlotsRemaining,
       });
-      console.log(`📉 Task slots updated: ${currentTask.slotsRemaining} → ${newSlotsRemaining}`);
+      console.log(`📉 Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
       
       // 3. Refresh tasks after submission
       const updatedTasks = await getAllTasks();
       const availableTasks = userRole === 'worker' && userData?.id 
-        ? updatedTasks.filter(t => t.employerId !== userData.id)
+        ? updatedTasks.filter(t => t.employer_id !== userData.id)
         : updatedTasks;
       setTasks(availableTasks);
       
@@ -344,7 +354,7 @@ export default function HomePage() {
               </div>
 
               <div className="space-y-6">
-                <Leaderboard entries={leaderboardEntries} />
+                <Leaderboard />
                 
                 {/* Quick Stats */}
                 <div className="glassmorphism p-5 border-white/10 rounded-lg">
@@ -402,12 +412,12 @@ export default function HomePage() {
               />
               <StatsCard
                 label="Total Reward"
-                value={`${employerTasks.reduce((sum, t) => sum + t.piReward, 0)} π`}
+                value={`${employerTasks.reduce((sum, t) => sum + t.pi_reward, 0)} π`}
                 icon={<Coins className="w-8 h-8" />}
               />
               <StatsCard
                 label="Slots Available"
-                value={employerTasks.reduce((sum, t) => sum + t.slotsRemaining, 0)}
+                value={employerTasks.reduce((sum, t) => sum + t.slots_remaining, 0)}
                 icon={<CheckCircle className="w-8 h-8" />}
               />
             </div>

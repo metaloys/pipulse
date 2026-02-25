@@ -200,7 +200,7 @@ export function SubmissionReviewModal({
           )}
 
           {/* Payment Breakdown (before approval) */}
-          {submission.submission_status === 'pending' && (
+          {submission.submission_status === 'submitted' && (
             <div className="glassmorphism p-4 rounded-lg bg-green-500/5 border border-green-500/20 space-y-3">
               <h4 className="font-semibold text-green-400">Payment Details</h4>
               <div className="space-y-2 text-sm">

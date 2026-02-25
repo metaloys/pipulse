@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
     // Get top earners
     const { data: topEarners, error: earnersError } = await supabase
       .from('User')
-      .select('pi_username, total_earnings, total_tasks_completed')
-      .order('total_earnings', { ascending: false })
+      .select('piUsername, totalEarnings, totalTasksCompleted')
+      .order('totalEarnings', { ascending: false })
       .limit(10);
 
     if (earnersError) throw earnersError;
@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
     // Get top workers by task count
     const { data: topWorkers, error: workersError } = await supabase
       .from('User')
-      .select('pi_username, total_earnings, total_tasks_completed')
-      .order('total_tasks_completed', { ascending: false })
+      .select('piUsername, totalEarnings, totalTasksCompleted')
+      .order('totalTasksCompleted', { ascending: false })
       .limit(10);
 
     if (workersError) throw workersError;

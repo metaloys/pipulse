@@ -9,7 +9,6 @@ import React, {
 } from "react";
 import { PI_NETWORK_CONFIG, BACKEND_URLS } from "@/lib/system-config";
 import { api, setApiAuthToken } from "@/lib/api";
-import { trpcClient } from "@/lib/trpc/client";
 import {
   initializeGlobalPayment,
   checkIncompletePayments,
@@ -288,38 +287,40 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
 
     const userData = await loginToBackend(accessToken, appId);
 
-    // Call tRPC createUser endpoint to create/get user from SQLite database
+    // Call REST API to create/get user from database
     try {
-      console.log(`📝 Creating/fetching user via tRPC with piUid: ${userData.id}, piUsername: ${userData.username}`);
+      console.log(`📝 Creating/fetching user via API with piUid: ${userData.id}, piUsername: ${userData.username}`);
       
-      const createUserResult = await trpcClient.auth.createUser.mutate({
-        piUid: userData.id,           // Pi Network user ID (immutable)
-        piUsername: userData.username, // Pi Network username (can change)
+      const response = await fetch('/api/auth/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ piUid: userData.id, piUsername: userData.username }),
       });
+      
+      const data = await response.json();
+      const user = data.user;
 
-      if (createUserResult.success && createUserResult.user) {
+      if (user) {
         console.log(`✅ User created/fetched successfully:`, {
-          userId: createUserResult.user.id,
-          piUid: createUserResult.user.piUid,
-          piUsername: createUserResult.user.piUsername,
-          userRole: createUserResult.user.userRole,
-          level: createUserResult.user.level,
-          totalEarnings: createUserResult.user.totalEarnings,
-          status: createUserResult.user.status,
-          isNew: createUserResult.isNew,
+          userId: user.id,
+          piUsername: user.piUsername,
+          userRole: user.userRole,
+          level: user.level,
+          totalEarnings: user.totalEarnings,
+          status: user.status,
         });
 
         // Store both the Pi user data and the full user object from database
         setPiAccessToken(accessToken);
         setApiAuthToken(accessToken);
         setUserData(userData);
-        setUser(createUserResult.user); // Store full user object for accessing user.id, role, etc.
+        setUser(user); // Store full user object for accessing user.id, role, etc.
         setAppId(userData.app_id);
       } else {
         throw new Error('Failed to create/fetch user from database');
       }
     } catch (error) {
-      console.error("Failed to create/fetch user in tRPC:", error);
+      console.error("Failed to create/fetch user:", error);
       // Don't block authentication if user creation fails - let app continue
       // But log the error for debugging
       setPiAccessToken(accessToken);
@@ -369,7 +370,6 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       console.log(`📝 Initializing Pi SDK with App ID: ${piAppId}`);
       await window.Pi.init({
         version: "2.0",
-        appId: piAppId,
         sandbox: PI_NETWORK_CONFIG.SANDBOX,
       });
       console.log("✅ Pi SDK initialized successfully with App ID:", piAppId);

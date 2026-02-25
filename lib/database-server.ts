@@ -707,9 +707,9 @@ export async function serverGetTopEarners(limit: number = 10) {
     const { data, error } = await supabase
       .from('User')
       .select(
-        'id, pi_username, level, total_earnings, total_tasks_completed'
+        'id, piUsername, level, totalEarnings, totalTasksCompleted'
       )
-      .order('total_earnings', { ascending: false })
+      .order('totalEarnings', { ascending: false })
       .limit(limit);
 
     if (error) {
@@ -717,13 +717,13 @@ export async function serverGetTopEarners(limit: number = 10) {
       return [];
     }
 
-    return (data || []).map((user, index) => ({
+    return (data || []).map((user: any, index) => ({
       rank: index + 1,
       id: user.id,
-      pi_username: user.pi_username,
+      pi_username: user.piUsername,
       level: user.level,
-      total_earnings: user.total_earnings,
-      total_tasks_completed: user.total_tasks_completed,
+      total_earnings: user.totalEarnings,
+      total_tasks_completed: user.totalTasksCompleted,
     }));
   } catch (error) {
     console.error('Error in serverGetTopEarners:', error);
@@ -738,7 +738,7 @@ export async function serverGetTopEmployers(limit: number = 10) {
     // Fetch all users
     const { data: users, error: usersError } = await supabase
       .from('User')
-      .select('id, pi_username, level');
+      .select('id, piUsername, level');
 
     if (usersError || !users) {
       console.error('Error fetching users:', usersError);
@@ -748,7 +748,7 @@ export async function serverGetTopEmployers(limit: number = 10) {
     // Fetch all tasks and aggregate by employer
     const { data: tasks, error: tasksError } = await supabase
       .from('Task')
-      .select('employer_id, pi_reward, slots_available');
+      .select('employerId, piReward, slotsAvailable');
 
     if (tasksError || !tasks) {
       console.error('Error fetching tasks:', tasksError);
@@ -762,22 +762,22 @@ export async function serverGetTopEmployers(limit: number = 10) {
     > = {};
 
     tasks.forEach((task: any) => {
-      if (!employerStats[task.employer_id]) {
-        employerStats[task.employer_id] = {
+      if (!employerStats[task.employerId]) {
+        employerStats[task.employerId] = {
           tasks_posted: 0,
           total_pi_spent: 0,
         };
       }
-      employerStats[task.employer_id].tasks_posted += 1;
-      employerStats[task.employer_id].total_pi_spent +=
-        (task.pi_reward || 0) * (task.slots_available || 1);
+      employerStats[task.employerId].tasks_posted += 1;
+      employerStats[task.employerId].total_pi_spent +=
+        (task.piReward || 0) * (task.slotsAvailable || 1);
     });
 
     // Combine user data with employer stats and sort
     const employers = users
       .map((user: any) => ({
         id: user.id,
-        pi_username: user.pi_username,
+        pi_username: user.piUsername,
         level: user.level,
         tasks_posted: employerStats[user.id]?.tasks_posted || 0,
         total_pi_spent: employerStats[user.id]?.total_pi_spent || 0,
@@ -802,14 +802,14 @@ export async function serverGetRisingStars(limit: number = 10) {
     const { data, error } = await supabase
       .from('User')
       .select(
-        'id, pi_username, level, total_earnings, total_tasks_completed, created_at'
+        'id, piUsername, level, totalEarnings, totalTasksCompleted, createdAt'
       )
       .gt(
-        'created_at',
+        'createdAt',
         new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
       ) // Last 30 days
-      .gt('total_earnings', 0)
-      .order('total_earnings', { ascending: false })
+      .gt('totalEarnings', 0)
+      .order('totalEarnings', { ascending: false })
       .limit(limit);
 
     if (error) {
@@ -817,8 +817,8 @@ export async function serverGetRisingStars(limit: number = 10) {
       return [];
     }
 
-    return (data || []).map((user, index) => {
-      const createdDate = new Date(user.created_at);
+    return (data || []).map((user: any, index) => {
+      const createdDate = new Date(user.createdAt);
       const daysAsMember = Math.floor(
         (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
       );
@@ -826,11 +826,11 @@ export async function serverGetRisingStars(limit: number = 10) {
       return {
         rank: index + 1,
         id: user.id,
-        pi_username: user.pi_username,
+        pi_username: user.piUsername,
         level: user.level,
-        total_earnings: user.total_earnings,
-        total_tasks_completed: user.total_tasks_completed,
-        created_at: user.created_at,
+        total_earnings: user.totalEarnings,
+        total_tasks_completed: user.totalTasksCompleted,
+        created_at: user.createdAt,
         days_as_member: daysAsMember,
       };
     });

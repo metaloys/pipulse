@@ -1,18 +1,3 @@
-import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
-import { appRouter } from '@/lib/trpc/routers/_app'
-
-export const GET = (req: Request) =>
-  fetchRequestHandler({
-    endpoint: '/api/trpc',
-    req,
-    router: appRouter,
-    createContext: () => ({}),
-  })
-
-export const POST = (req: Request) =>
-  fetchRequestHandler({
-    endpoint: '/api/trpc',
-    req,
-    router: appRouter,
-    createContext: () => ({}),
-  })
+// This file has been deprecated. 
+// The tRPC handler is now at: app/api/trpc/[trpc]/route.ts
+// This file should be deleted.

@@ -23,18 +23,13 @@ interface TaskManagementProps {
 }
 
 const CATEGORIES: TaskCategory[] = [
-  'data-entry',
-  'photo-capture',
-  'video-recording',
-  'writing',
-  'review',
+  'app-testing',
+  'survey',
   'translation',
-  'research',
-  'design',
-  'marketing',
-  'development',
-  'testing',
-  'other',
+  'audio-recording',
+  'photo-capture',
+  'content-review',
+  'data-labeling',
 ];
 
 // Calculate time remaining until deadline

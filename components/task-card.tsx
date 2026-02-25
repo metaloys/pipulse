@@ -38,8 +38,8 @@ export function TaskCard({ task, onAccept }: TaskCardProps) {
   const piReward = 'piReward' in task ? task.piReward : task.pi_reward;
   const timeEstimate = 'timeEstimate' in task ? task.timeEstimate : task.time_estimate;
   const employerName = 'employerName' in task ? task.employerName : 'Unknown Employer';
-  const createdAt = 'createdAt' in task ? task.createdAt : task.created_at;
-  const updatedAt = 'updatedAt' in task ? task.updatedAt : task.updated_at;
+  const createdAt = 'created_at' in task ? (task as DatabaseTask).created_at : null;
+  const updatedAt = 'updated_at' in task ? (task as DatabaseTask).updated_at : null;
   
   const slotsPercentage = ((slots - slotsRemaining) / slots) * 100;
 

@@ -429,16 +429,19 @@ export async function POST(request: NextRequest) {
           console.log(`   Recovery entry:`, recoveryEntry);
 
           // Try to log to recovery table (but don't fail if it doesn't exist yet)
-          const { error: recoveryError } = await supabaseAdmin
-            .from('failed_completions')
-            .insert([recoveryEntry])
-            .catch(() => ({ error: null }));
+          try {
+            const { error: recoveryError } = await supabaseAdmin
+              .from('failed_completions')
+              .insert([recoveryEntry]);
 
-          if (recoveryError) {
-            console.warn(`⚠️ Could not log to failed_completions table (table may not exist yet):`, recoveryError);
-            console.log(`   Manual recovery needed - save this data: `, recoveryEntry);
-          } else {
-            console.log(`✅ Recovery entry logged for manual inspection`);
+            if (recoveryError) {
+              console.warn(`⚠️ Could not log to failed_completions table (table may not exist yet):`, recoveryError);
+              console.log(`   Manual recovery needed - save this data: `, recoveryEntry);
+            } else {
+              console.log(`✅ Recovery entry logged for manual inspection`);
+            }
+          } catch (recoveryLogError) {
+            console.warn(`⚠️ Could not log to failed_completions table:`, recoveryLogError);
           }
 
           // IMPORTANT: Still return success to Pi SDK - payment already completed on blockchain

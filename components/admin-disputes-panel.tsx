@@ -147,7 +147,7 @@ export function AdminDisputesPanel({ adminId }: AdminDisputesPanelProps) {
                       Task: {taskDetails?.title || 'Loading...'}
                     </div>
                     <div className="text-sm text-white/60 mb-2">
-                      Worker: {workerDetails?.username || dispute.worker_id.slice(0, 8)}...
+                      Worker: {workerDetails?.pi_username || dispute.worker_id.slice(0, 8)}...
                     </div>
                     <div className="text-sm text-white/50 line-clamp-2">
                       {dispute.dispute_reason}
@@ -190,10 +190,10 @@ export function AdminDisputesPanel({ adminId }: AdminDisputesPanelProps) {
             <div className="mb-6 p-4 rounded-lg bg-white/5 border border-white/10">
               <div className="text-sm text-white/60 mb-1">Worker</div>
               <div className="text-white font-medium">
-                {workerDetails?.username || selectedDispute.worker_id}
+                {workerDetails?.pi_username || selectedDispute.worker_id}
               </div>
               <div className="text-sm text-white/50 mt-2">
-                Email: {workerDetails?.email || 'N/A'}
+                Wallet: {workerDetails?.pi_wallet_address || 'N/A'}
               </div>
             </div>
 

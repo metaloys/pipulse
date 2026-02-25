@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { DatabaseTask, DatabaseUser, DatabaseTaskSubmission, DatabaseTransaction, DatabaseStreak } from './types';
+import type { DatabaseTask, DatabaseUser, DatabaseTaskSubmission, DatabaseTransaction, DatabaseStreak, DatabaseDispute } from './types';
 
 // ============ USERS ============
 
@@ -7,7 +7,7 @@ export async function getUserByUsername(username: string) {
   const { data, error } = await supabase
     .from('User')
     .select('*')
-    .eq('pi_username', username)
+    .eq('piUsername', username)
     .maybeSingle();
 
   if (error) {
@@ -87,15 +87,15 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
       .from('User')
       .insert([{
         id: userId,
-        pi_username: username,
-        pi_wallet_address: null, // CRITICAL FIX: Don't send empty string, use null
-        user_role: 'worker', // Default role - users start as workers
+        piUsername: username,
+        piWalletAddress: null, // CRITICAL FIX: Don't send empty string, use null
+        userRole: 'worker', // Default role - users start as workers
         level: 'Newcomer',
-        current_streak: 0,
-        longest_streak: 0,
-        last_active_date: new Date().toISOString(),
-        total_earnings: 0,
-        total_tasks_completed: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+        lastActiveDate: new Date().toISOString(),
+        totalEarnings: 0,
+        totalTasksCompleted: 0,
       }])
       .select()
       .maybeSingle();
@@ -104,7 +104,7 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
       console.error(`❌ Failed to create user ${username}:`, error);
       
       // If 409 conflict, try to fetch again - might have been created by concurrent request
-      if (error.status === 409) {
+      if ((error as any).status === 409) {
         console.warn(`⚠️ 409 conflict - attempting recovery by fetching user...`);
         const byId = await getUserById(userId);
         if (byId) {
@@ -158,8 +158,8 @@ export async function switchUserRole(userId: string, newRole: 'worker' | 'employ
   const { data, error } = await supabase
     .from('User')
     .update({ 
-      user_role: newRole,
-      updated_at: new Date().toISOString()
+      userRole: newRole,
+      updatedAt: new Date().toISOString()
     })
     .eq('id', userId)
     .select()
@@ -171,7 +171,7 @@ export async function switchUserRole(userId: string, newRole: 'worker' | 'employ
   }
 
   if (data) {
-    console.log(`✅ Role switched successfully to ${newRole}:`, data.user_role);
+    console.log(`✅ Role switched successfully to ${newRole}:`, data.userRole);
     return data as DatabaseUser;
   }
 
@@ -184,9 +184,9 @@ export async function getAllTasks() {
   const { data, error } = await supabase
     .from('Task')
     .select('*')
-    .eq('task_status', 'available')
-    .gt('slots_remaining', 0)  // Only show tasks with available slots
-    .order('created_at', { ascending: false });
+    .eq('taskStatus', 'available')
+    .gt('slotsRemaining', 0)  // Only show tasks with available slots
+    .order('createdAt', { ascending: false });
 
   if (error) {
     console.error('Error fetching tasks:', error);
@@ -200,9 +200,9 @@ export async function getTasksByCategory(category: string) {
     .from('Task')
     .select('*')
     .eq('category', category)
-    .eq('task_status', 'available')
-    .gt('slots_remaining', 0)  // Only show tasks with available slots
-    .order('created_at', { ascending: false });
+    .eq('taskStatus', 'available')
+    .gt('slotsRemaining', 0)  // Only show tasks with available slots
+    .order('createdAt', { ascending: false });
 
   if (error) {
     console.error('Error fetching tasks:', error);
@@ -325,7 +325,7 @@ export async function getTasksByEmployer(employerId: string) {
 
 export async function submitTask(submission: Omit<DatabaseTaskSubmission, 'id' | 'created_at' | 'updated_at'>) {
   const { data, error } = await supabase
-    .from('task_submissions')
+    .from('TaskSubmission')
     .insert([submission])
     .select()
     .maybeSingle();
@@ -339,10 +339,10 @@ export async function submitTask(submission: Omit<DatabaseTaskSubmission, 'id' |
 
 export async function getWorkerSubmissions(workerId: string) {
   const { data, error } = await supabase
-    .from('task_submissions')
+    .from('TaskSubmission')
     .select('*')
-    .eq('worker_id', workerId)
-    .order('submitted_at', { ascending: false });
+    .eq('workerId', workerId)
+    .order('submittedAt', { ascending: false });
 
   if (error) {
     console.error('Error fetching worker submissions:', error);
@@ -353,10 +353,10 @@ export async function getWorkerSubmissions(workerId: string) {
 
 export async function getTaskSubmissions(taskId: string) {
   const { data, error } = await supabase
-    .from('task_submissions')
+    .from('TaskSubmission')
     .select('*')
-    .eq('task_id', taskId)
-    .order('submitted_at', { ascending: false });
+    .eq('taskId', taskId)
+    .order('submittedAt', { ascending: false });
 
   if (error) {
     console.error('Error fetching task submissions:', error);
@@ -367,11 +367,11 @@ export async function getTaskSubmissions(taskId: string) {
 
 export async function approveSubmission(submissionId: string) {
   const { data, error } = await supabase
-    .from('task_submissions')
+    .from('TaskSubmission')
     .update({ 
-      submission_status: 'approved', 
-      reviewed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      submissionStatus: 'approved', 
+      reviewedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     })
     .eq('id', submissionId)
     .select()
@@ -386,12 +386,12 @@ export async function approveSubmission(submissionId: string) {
 
 export async function rejectSubmission(submissionId: string, reason: string) {
   const { data, error } = await supabase
-    .from('task_submissions')
+    .from('TaskSubmission')
     .update({ 
-      submission_status: 'rejected', 
-      rejection_reason: reason,
-      reviewed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      submissionStatus: 'rejected', 
+      rejectionReason: reason,
+      reviewedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     })
     .eq('id', submissionId)
     .select()
@@ -452,9 +452,9 @@ export async function getTransactionById(transactionId: string) {
 
 export async function getUserStreak(userId: string) {
   const { data, error } = await supabase
-    .from('streaks')
+    .from('Streak')
     .select('*')
-    .eq('user_id', userId)
+    .eq('userId', userId)
     .maybeSingle();
 
   if (error) {
@@ -466,13 +466,13 @@ export async function getUserStreak(userId: string) {
 
 export async function createStreak(userId: string) {
   const { data, error } = await supabase
-    .from('streaks')
+    .from('Streak')
     .insert([{
-      user_id: userId,
-      current_streak: 0,
-      longest_streak: 0,
-      last_active_date: new Date().toISOString(),
-      streak_bonus_earned: false
+      userId: userId,
+      currentStreak: 0,
+      longestStreak: 0,
+      lastActiveDate: new Date().toISOString(),
+      streakBonusEarned: false
     }])
     .select()
     .maybeSingle();
@@ -486,9 +486,9 @@ export async function createStreak(userId: string) {
 
 export async function updateStreak(userId: string, updates: Partial<DatabaseStreak>) {
   const { data, error } = await supabase
-    .from('streaks')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
+    .from('Streak')
+    .update({ ...updates, updatedAt: new Date().toISOString() })
+    .eq('userId', userId)
     .select()
     .maybeSingle();
 
@@ -504,9 +504,9 @@ export async function updateStreak(userId: string, updates: Partial<DatabaseStre
 export async function getLeaderboard(limit: number = 10) {
   const { data, error } = await supabase
     .from('User')
-    .select('id, pi_username, total_earnings, total_tasks_completed')
-    .eq('user_role', 'worker')
-    .order('total_earnings', { ascending: false })
+    .select('id, piUsername, totalEarnings, totalTasksCompleted')
+    .eq('userRole', 'worker')
+    .order('totalEarnings', { ascending: false })
     .limit(limit);
 
   if (error) {
@@ -552,10 +552,10 @@ export async function getUserStats(userId: string) {
     // Fetch all transactions for this user as receiver
     const { data: allTransactions, error: txError } = await supabase
       .from('Transaction')
-      .select('id, amount, pipulse_fee, created_at, transaction_status')
-      .eq('receiver_id', userId)
-      .eq('transaction_status', 'completed')
-      .order('created_at', { ascending: false });
+      .select('id, amount, pipulseFee, createdAt, transactionStatus')
+      .eq('receiverId', userId)
+      .eq('transactionStatus', 'completed')
+      .order('createdAt', { ascending: false });
 
     if (txError) {
       console.error('Error fetching transactions for stats:', txError);
@@ -573,22 +573,22 @@ export async function getUserStats(userId: string) {
     const transactions = allTransactions || [];
 
     // Calculate net earnings (amount - fee) for each period
-    const totalEarnings = transactions.reduce((sum, t) => {
-      const netAmount = (t.amount || 0) - (t.pipulse_fee || 0);
+    const totalEarnings = transactions.reduce((sum, t: any) => {
+      const netAmount = (t.amount || 0) - (t.pipulseFee || 0);
       return sum + netAmount;
     }, 0);
 
     const weeklyEarnings = transactions
-      .filter(t => (t.created_at || '') >= sevenDaysAgo)
-      .reduce((sum, t) => {
-        const netAmount = (t.amount || 0) - (t.pipulse_fee || 0);
+      .filter((t: any) => (t.createdAt || '') >= sevenDaysAgo)
+      .reduce((sum, t: any) => {
+        const netAmount = (t.amount || 0) - (t.pipulseFee || 0);
         return sum + netAmount;
       }, 0);
 
     const dailyEarnings = transactions
-      .filter(t => (t.created_at || '') >= oneDayAgo)
-      .reduce((sum, t) => {
-        const netAmount = (t.amount || 0) - (t.pipulse_fee || 0);
+      .filter((t: any) => (t.createdAt || '') >= oneDayAgo)
+      .reduce((sum, t: any) => {
+        const netAmount = (t.amount || 0) - (t.pipulseFee || 0);
         return sum + netAmount;
       }, 0);
 
@@ -601,7 +601,7 @@ export async function getUserStats(userId: string) {
       tasksCompleted: transactions.length, // Count of completed transactions
       currentStreak: user.current_streak || 0,
       level: user.level || 'Newcomer',
-      availableTasksCount: submissions.filter(s => s.submission_status === 'pending').length,
+      availableTasksCount: submissions.filter((s: any) => s.submission_status === 'submitted').length,
     };
   } catch (error) {
     console.error('Error getting user stats:', error);
@@ -629,9 +629,9 @@ export async function getTodayCommissions() {
   
   const { data, error } = await supabase
     .from('Transaction')
-    .select('pipulse_fee')
-    .eq('transaction_type', 'fee')
-    .eq('transaction_status', 'completed')
+    .select('pipulseFee')
+    .eq('transactionType', 'fee')
+    .eq('transactionStatus', 'completed')
     .gte('timestamp', today.toISOString());
 
   if (error) {
@@ -639,7 +639,7 @@ export async function getTodayCommissions() {
     return 0;
   }
 
-  return data.reduce((sum, t) => sum + (t.pipulse_fee || 0), 0);
+  return data.reduce((sum, t) => sum + (t.pipulseFee || 0), 0);
 }
 
 /**
@@ -651,9 +651,9 @@ export async function getMonthCommissions() {
   
   const { data, error } = await supabase
     .from('Transaction')
-    .select('pipulse_fee')
-    .eq('transaction_type', 'fee')
-    .eq('transaction_status', 'completed')
+    .select('pipulseFee')
+    .eq('transactionType', 'fee')
+    .eq('transactionStatus', 'completed')
     .gte('timestamp', monthStart.toISOString());
 
   if (error) {
@@ -661,7 +661,7 @@ export async function getMonthCommissions() {
     return 0;
   }
 
-  return data.reduce((sum, t) => sum + (t.pipulse_fee || 0), 0);
+  return data.reduce((sum, t) => sum + (t.pipulseFee || 0), 0);
 }
 
 /**
@@ -690,7 +690,7 @@ export async function getPendingTransactions() {
   const { data, error } = await supabase
     .from('Transaction')
     .select('*')
-    .eq('transaction_status', 'pending')
+    .eq('transactionStatus', 'pending')
     .order('timestamp', { ascending: false });
 
   if (error) {
@@ -708,8 +708,8 @@ export async function updateTransactionStatus(transactionId: string, status: 'co
   const { data, error } = await supabase
     .from('Transaction')
     .update({ 
-      transaction_status: status,
-      updated_at: new Date().toISOString()
+      transactionStatus: status,
+      updatedAt: new Date().toISOString()
     })
     .eq('id', transactionId)
     .select()
@@ -730,7 +730,7 @@ export async function updateTransactionStatus(transactionId: string, status: 'co
  */
 export async function createDispute(dispute: Omit<DatabaseDispute, 'id' | 'created_at' | 'updated_at'>) {
   const { data, error } = await supabase
-    .from('disputes')
+    .from('Dispute')
     .insert([dispute])
     .select()
     .maybeSingle();
@@ -747,9 +747,9 @@ export async function createDispute(dispute: Omit<DatabaseDispute, 'id' | 'creat
  */
 export async function getAllDisputes() {
   const { data, error } = await supabase
-    .from('disputes')
+    .from('Dispute')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('createdAt', { ascending: false });
 
   if (error) {
     console.error('Error fetching disputes:', error);
@@ -763,10 +763,10 @@ export async function getAllDisputes() {
  */
 export async function getPendingDisputes() {
   const { data, error } = await supabase
-    .from('disputes')
+    .from('Dispute')
     .select('*')
-    .eq('dispute_status', 'pending')
-    .order('created_at', { ascending: false });
+    .eq('disputeStatus', 'pending')
+    .order('createdAt', { ascending: false });
 
   if (error) {
     console.error('Error fetching pending disputes:', error);
@@ -780,10 +780,10 @@ export async function getPendingDisputes() {
  */
 export async function getWorkerDisputes(workerId: string) {
   const { data, error } = await supabase
-    .from('disputes')
+    .from('Dispute')
     .select('*')
-    .eq('worker_id', workerId)
-    .order('created_at', { ascending: false });
+    .eq('workerId', workerId)
+    .order('createdAt', { ascending: false });
 
   if (error) {
     console.error('Error fetching worker disputes:', error);
@@ -797,10 +797,10 @@ export async function getWorkerDisputes(workerId: string) {
  */
 export async function getEmployerDisputes(employerId: string) {
   const { data, error } = await supabase
-    .from('disputes')
+    .from('Dispute')
     .select('*')
-    .eq('employer_id', employerId)
-    .order('created_at', { ascending: false });
+    .eq('employerId', employerId)
+    .order('createdAt', { ascending: false });
 
   if (error) {
     console.error('Error fetching employer disputes:', error);
@@ -814,7 +814,7 @@ export async function getEmployerDisputes(employerId: string) {
  */
 export async function getDisputeById(disputeId: string) {
   const { data, error } = await supabase
-    .from('disputes')
+    .from('Dispute')
     .select('*')
     .eq('id', disputeId)
     .maybeSingle();
@@ -836,14 +836,14 @@ export async function resolveDispute(
   adminId: string
 ) {
   const { data, error } = await supabase
-    .from('disputes')
+    .from('Dispute')
     .update({
-      dispute_status: 'resolved',
-      admin_ruling: ruling,
-      admin_notes: adminNotes,
-      admin_id: adminId,
-      resolved_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      disputeStatus: 'resolved',
+      adminRuling: ruling,
+      adminNotes: adminNotes,
+      adminId: adminId,
+      resolvedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     })
     .eq('id', disputeId)
     .select()
@@ -861,10 +861,10 @@ export async function resolveDispute(
  */
 export async function hasActiveDispute(submissionId: string) {
   const { data, error } = await supabase
-    .from('disputes')
+    .from('Dispute')
     .select('id')
-    .eq('submission_id', submissionId)
-    .eq('dispute_status', 'pending')
+    .eq('submissionId', submissionId)
+    .eq('disputeStatus', 'pending')
     .maybeSingle();
 
   if (error && error.code !== 'PGRST116') {
@@ -1307,7 +1307,7 @@ export async function getPublicUserProfile(
   try {
     const { data, error } = await supabase
       .from('User')
-      .select('id, pi_username, level, total_tasks_completed, total_earnings')
+      .select('id, piUsername, level, totalTasksCompleted, totalEarnings')
       .eq('id', userId)
       .single();
 
@@ -1489,8 +1489,8 @@ export function subscribeToNotifications(
 export async function getTopEarners(limit: number = 10) {
   const { data, error } = await supabase
     .from('User')
-    .select('id, pi_username, level, total_earnings, total_tasks_completed')
-    .order('total_earnings', { ascending: false })
+    .select('id, piUsername, level, totalEarnings, totalTasksCompleted')
+    .order('totalEarnings', { ascending: false })
     .limit(limit);
 
   if (error) {
@@ -1501,10 +1501,10 @@ export async function getTopEarners(limit: number = 10) {
   return (data || []).map((user, index) => ({
     rank: index + 1,
     id: user.id,
-    pi_username: user.pi_username,
+    piUsername: user.piUsername,
     level: user.level,
-    total_earnings: user.total_earnings,
-    total_tasks_completed: user.total_tasks_completed,
+    totalEarnings: user.totalEarnings,
+    totalTasksCompleted: user.totalTasksCompleted,
   }));
 }
 
@@ -1513,7 +1513,7 @@ export async function getTopEmployers(limit: number = 10) {
     // Fetch all users
     const { data: users, error: usersError } = await supabase
       .from('User')
-      .select('id, pi_username, level');
+      .select('id, piUsername, level');
 
     if (usersError || !users) {
       console.error('Error fetching users:', usersError);
@@ -1523,7 +1523,7 @@ export async function getTopEmployers(limit: number = 10) {
     // Fetch all tasks and aggregate by employer
     const { data: tasks, error: tasksError } = await supabase
       .from('Task')
-      .select('employer_id, pi_reward, slots_available');
+      .select('employerId, piReward, slotsAvailable');
 
     if (tasksError || !tasks) {
       console.error('Error fetching tasks:', tasksError);
@@ -1531,27 +1531,27 @@ export async function getTopEmployers(limit: number = 10) {
     }
 
     // Aggregate tasks by employer
-    const employerStats: Record<string, { tasks_posted: number; total_pi_spent: number }> = {};
+    const employerStats: Record<string, { tasksPosted: number; totalPiSpent: number }> = {};
 
     tasks.forEach((task: any) => {
-      if (!employerStats[task.employer_id]) {
-        employerStats[task.employer_id] = { tasks_posted: 0, total_pi_spent: 0 };
+      if (!employerStats[task.employerId]) {
+        employerStats[task.employerId] = { tasksPosted: 0, totalPiSpent: 0 };
       }
-      employerStats[task.employer_id].tasks_posted += 1;
-      employerStats[task.employer_id].total_pi_spent += (task.pi_reward || 0) * (task.slots_available || 1);
+      employerStats[task.employerId].tasksPosted += 1;
+      employerStats[task.employerId].totalPiSpent += (task.piReward || 0) * (task.slotsAvailable || 1);
     });
 
     // Combine user data with employer stats and sort
     const employers = users
       .map((user: any) => ({
         id: user.id,
-        pi_username: user.pi_username,
+        piUsername: user.piUsername,
         level: user.level,
-        tasks_posted: employerStats[user.id]?.tasks_posted || 0,
-        total_pi_spent: employerStats[user.id]?.total_pi_spent || 0,
+        tasksPosted: employerStats[user.id]?.tasksPosted || 0,
+        totalPiSpent: employerStats[user.id]?.totalPiSpent || 0,
       }))
-      .filter((emp: any) => emp.tasks_posted > 0) // Only show users who posted tasks
-      .sort((a: any, b: any) => b.total_pi_spent - a.total_pi_spent)
+      .filter((emp: any) => emp.tasksPosted > 0) // Only show users who posted tasks
+      .sort((a: any, b: any) => b.totalPiSpent - a.totalPiSpent)
       .slice(0, limit);
 
     return employers.map((emp: any, index: number) => ({
@@ -1567,10 +1567,10 @@ export async function getTopEmployers(limit: number = 10) {
 export async function getRisingStars(limit: number = 10) {
   const { data, error } = await supabase
     .from('User')
-    .select('id, pi_username, level, total_earnings, total_tasks_completed, created_at')
-    .gt('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) // Last 30 days
-    .gt('total_earnings', 0)
-    .order('total_earnings', { ascending: false })
+    .select('id, piUsername, level, totalEarnings, totalTasksCompleted, createdAt')
+    .gt('createdAt', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) // Last 30 days
+    .gt('totalEarnings', 0)
+    .order('totalEarnings', { ascending: false })
     .limit(limit);
 
   if (error) {
@@ -1579,7 +1579,7 @@ export async function getRisingStars(limit: number = 10) {
   }
 
   return (data || []).map((user, index) => {
-    const createdDate = new Date(user.created_at);
+    const createdDate = new Date(user.createdAt);
     const daysAsMember = Math.floor(
       (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
     );
@@ -1587,12 +1587,12 @@ export async function getRisingStars(limit: number = 10) {
     return {
       rank: index + 1,
       id: user.id,
-      pi_username: user.pi_username,
+      piUsername: user.piUsername,
       level: user.level,
-      total_earnings: user.total_earnings,
-      total_tasks_completed: user.total_tasks_completed,
-      created_at: user.created_at,
-      days_as_member: daysAsMember,
+      totalEarnings: user.totalEarnings,
+      totalTasksCompleted: user.totalTasksCompleted,
+      createdAt: user.createdAt,
+      daysAsMember: daysAsMember,
     };
   });
 }
@@ -1604,7 +1604,7 @@ export async function getUserLeaderboardPosition(
   if (leaderboardType === 'earners') {
     const { data, error } = await supabase
       .from('User')
-      .select('total_earnings')
+      .select('totalEarnings')
       .eq('id', userId)
       .maybeSingle();
 
@@ -1615,7 +1615,7 @@ export async function getUserLeaderboardPosition(
     const { count } = await supabase
       .from('User')
       .select('*', { count: 'exact', head: true })
-      .gt('total_earnings', data.total_earnings);
+      .gt('totalEarnings', data.totalEarnings);
 
     if (count === null) {
       return null;
@@ -1623,7 +1623,7 @@ export async function getUserLeaderboardPosition(
 
     return {
       rank: count + 1,
-      earnings: data.total_earnings,
+      earnings: data.totalEarnings,
     };
   }
 
@@ -1640,7 +1640,7 @@ export async function updateUserEarnings(userId: string, amountEarned: number) {
   try {
     const { data, error } = await supabase
       .from('User')
-      .select('total_earnings')
+      .select('totalEarnings')
       .eq('id', userId)
       .maybeSingle();
 
@@ -1649,11 +1649,11 @@ export async function updateUserEarnings(userId: string, amountEarned: number) {
       return null;
     }
 
-    const newEarnings = (data.total_earnings || 0) + amountEarned;
+    const newEarnings = (data.totalEarnings || 0) + amountEarned;
 
     const { data: updated, error: updateError } = await supabase
       .from('User')
-      .update({ total_earnings: newEarnings })
+      .update({ totalEarnings: newEarnings })
       .eq('id', userId)
       .select()
       .maybeSingle();
@@ -1678,7 +1678,7 @@ export async function incrementUserTaskCount(userId: string, count: number = 1) 
   try {
     const { data, error } = await supabase
       .from('User')
-      .select('total_tasks_completed')
+      .select('totalTasksCompleted')
       .eq('id', userId)
       .maybeSingle();
 
@@ -1687,11 +1687,11 @@ export async function incrementUserTaskCount(userId: string, count: number = 1) 
       return null;
     }
 
-    const newCount = (data.total_tasks_completed || 0) + count;
+    const newCount = (data.totalTasksCompleted || 0) + count;
 
     const { data: updated, error: updateError } = await supabase
       .from('User')
-      .update({ total_tasks_completed: newCount })
+      .update({ totalTasksCompleted: newCount })
       .eq('id', userId)
       .select()
       .maybeSingle();
@@ -1716,7 +1716,7 @@ export async function updateUserStatsAfterApproval(userId: string, piAmount: num
   try {
     const { data, error } = await supabase
       .from('User')
-      .select('total_earnings, total_tasks_completed')
+      .select('totalEarnings, totalTasksCompleted')
       .eq('id', userId)
       .maybeSingle();
 
@@ -1726,8 +1726,8 @@ export async function updateUserStatsAfterApproval(userId: string, piAmount: num
     }
 
     const updated = {
-      total_earnings: (data.total_earnings || 0) + piAmount,
-      total_tasks_completed: (data.total_tasks_completed || 0) + 1,
+      totalEarnings: (data.totalEarnings || 0) + piAmount,
+      totalTasksCompleted: (data.totalTasksCompleted || 0) + 1,
     };
 
     const { data: result, error: updateError } = await supabase
