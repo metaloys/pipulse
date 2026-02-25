@@ -206,7 +206,53 @@ export default function HomePage() {
         throw new Error('Task not found');
       }
       
-      // 1. Create the submission record with agreed_reward for price protection
+      // STEP 2: Trigger Pi Payment BEFORE creating submission
+      console.log(`💳 [STEP 1] Initiating Pi payment for task reward: ${currentTask.pi_reward}π`);
+      
+      // Create a promise that resolves when payment is approved
+      const paymentApproved = new Promise<void>((resolve, reject) => {
+        if (!window.pay) {
+          console.warn('⚠️ Pi payment not available, skipping payment step');
+          resolve();
+          return;
+        }
+
+        const paymentOptions = {
+          amount: parseFloat(currentTask.pi_reward.toString()),
+          memo: `PiPulse Task: ${currentTask.title}`,
+          metadata: {
+            taskId: taskId,
+            workerId: workerId,
+            taskTitle: currentTask.title,
+            taskReward: currentTask.pi_reward,
+            submissionType: submissionType,
+          },
+          onComplete: (metadata: any) => {
+            console.log(`✅ [STEP 2] Pi payment approved:`, metadata);
+            console.log(`   Task: ${currentTask.title}`);
+            console.log(`   Amount: ${currentTask.pi_reward}π`);
+            console.log(`   Worker: ${workerId}`);
+            resolve();
+          },
+          onError: (error: Error) => {
+            console.error(`❌ [STEP 2] Pi payment failed:`, error);
+            reject(error);
+          },
+        };
+
+        try {
+          window.pay?.(paymentOptions);
+        } catch (err) {
+          console.error('❌ Failed to initiate payment:', err);
+          reject(err);
+        }
+      });
+
+      // Wait for payment before proceeding
+      await paymentApproved;
+      
+      // STEP 3: Create the submission record AFTER payment approved
+      console.log(`✅ [STEP 3] Payment confirmed. Creating submission record...`);
       const submission = await submitTask({
         task_id: taskId,
         worker_id: workerId,
@@ -229,21 +275,24 @@ export default function HomePage() {
         throw new Error('Failed to save submission');
       }
 
-      console.log(`✅ Task submitted successfully with ID: ${submission.id}`);
+      console.log(`✅ [STEP 4] Task submission created with ID: ${submission.id}`);
       
-      // 2. Decrement the slots_remaining for this task
+      // STEP 4: Decrement the slots_remaining for this task
+      console.log(`📉 [STEP 5] Decrementing task slots...`);
       const newSlotsRemaining = Math.max(0, currentTask.slots_remaining - 1);
       await updateTask(taskId, {
         slots_remaining: newSlotsRemaining,
       });
-      console.log(`📉 Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
+      console.log(`✅ [STEP 5] Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
       
-      // 3. Refresh tasks after submission
+      // STEP 5: Refresh tasks after submission
+      console.log(`🔄 [STEP 6] Refreshing task list...`);
       const updatedTasks = await getAllTasks();
       const availableTasks = userRole === 'worker' && userData?.id 
         ? updatedTasks.filter(t => t.employer_id !== userData.id)
         : updatedTasks;
       setTasks(availableTasks);
+      console.log(`✅ [STEP 6] Task acceptance complete!`);
       
     } catch (error) {
       console.error('Error submitting task:', error);
