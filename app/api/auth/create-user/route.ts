@@ -30,16 +30,18 @@ export async function POST(request: NextRequest) {
     const { data: newUser, error: insertError } = await supabase
       .from('User')
       .insert([{
-        id: piUid,
-        piUid: piUid,
-        piUsername: piUsername,
-        userRole: 'worker',
-        level: 'NEWCOMER',
-        currentStreak: 0,
-        longestStreak: 0,
-        totalEarnings: 0,
-        totalTasksCompleted: 0,
-      }])
+  id: piUid,
+  piUid: piUid,
+  piUsername: piUsername,
+  userRole: 'worker',
+  level: 'NEWCOMER',
+  currentStreak: 0,
+  longestStreak: 0,
+  totalEarnings: 0,
+  totalTasksCompleted: 0,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+}])
       .select()
       .maybeSingle();
 
