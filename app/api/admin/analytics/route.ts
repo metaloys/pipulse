@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const { data: transactions, error: transError } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .select('created_at, pipulse_fee')
       .gte('created_at', sevenDaysAgo.toISOString());
 

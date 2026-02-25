@@ -361,11 +361,18 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       setAuthMessage("Initializing Pi Network...");
       console.log("📍 Initializing Pi SDK with config:", PI_NETWORK_CONFIG);
       
+      const piAppId = process.env.NEXT_PUBLIC_PI_APP_ID;
+      if (!piAppId) {
+        throw new Error("NEXT_PUBLIC_PI_APP_ID environment variable is not set");
+      }
+      
+      console.log(`📝 Initializing Pi SDK with App ID: ${piAppId}`);
       await window.Pi.init({
         version: "2.0",
+        appId: piAppId,
         sandbox: PI_NETWORK_CONFIG.SANDBOX,
       });
-      console.log("✅ Pi SDK initialized successfully");
+      console.log("✅ Pi SDK initialized successfully with App ID:", piAppId);
 
       setAuthMessage("Authenticating with Pi Network...");
       const scopes = ["username", "payments"];

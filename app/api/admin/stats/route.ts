@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     // Get total commission (sum of all pipulse_fee)
     console.log('📥 [ADMIN STATS] Fetching all transactions...');
     const { data: transactionData, error: transactionError } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .select('pipulse_fee');
 
     if (transactionError) {
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
 
     console.log('📥 [ADMIN STATS] Fetching daily transactions...');
     const { data: dailyData, error: dailyError } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .select('pipulse_fee')
       .gte('created_at', oneDayAgo.toISOString());
 
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
     // Get total tasks count
     console.log('📥 [ADMIN STATS] Counting tasks...');
     const { count: totalTasks, error: tasksError } = await supabase
-      .from('tasks')
+      .from('Task')
       .select('*', { count: 'exact', head: true });
 
     if (tasksError) {
@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
     // Get completed transactions count
     console.log('📥 [ADMIN STATS] Counting completed transactions...');
     const { count: completedTransactions, error: completedError } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .select('*', { count: 'exact', head: true })
       .eq('transaction_status', 'completed');
 
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
     // Get active tasks count (available or in-progress)
     console.log('📥 [ADMIN STATS] Counting active tasks...');
     const { count: activeTasks, error: activeTasksError } = await supabase
-      .from('tasks')
+      .from('Task')
       .select('*', { count: 'exact', head: true })
       .in('task_status', ['available', 'in-progress']);
 

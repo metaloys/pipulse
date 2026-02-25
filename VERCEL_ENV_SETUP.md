@@ -14,6 +14,7 @@ These are the environment variables needed for the **hybrid-rebuild** branch on 
 |---------------|-------|------|----------|
 | `NEXT_PUBLIC_PI_APP_ID` | `micro-task-03d1bf03bdda2981` | Public | ✅ YES |
 | `PI_API_KEY` | `qidswbctzqxwcwrxzmsk5s8r7isftncgs25ep8bxooos4gpkwrnnrdo1yyyqyasw` | Secret | ✅ YES |
+| `PI_VALIDATION_KEY` | `5006b78fa2d0c41f17f20037a85eadc17f42fee907b432458c9435b898a72d020f33be819bca2c610fe75a8f00447666210e01608a9fd5a5891385edc5acef7d` | Secret | ✅ YES |
 | `DATABASE_URL` | `file:./dev.db` | Private | ✅ YES |
 | `ADMIN_PASSWORD` | `pipulse_admin_2024` | Secret | ✅ YES |
 
@@ -45,6 +46,14 @@ These are the environment variables needed for the **hybrid-rebuild** branch on 
 3. **Value:** `qidswbctzqxwcwrxzmsk5s8r7isftncgs25ep8bxooos4gpkwrnnrdo1yyyqyasw`
 4. **Environment:** Development, Preview, Production (select all 3)
 5. Click **"Save"**
+
+#### Add `PI_VALIDATION_KEY` (Secret)
+1. Click **"Add New"** button
+2. **Name:** `PI_VALIDATION_KEY`
+3. **Value:** `5006b78fa2d0c41f17f20037a85eadc17f42fee907b432458c9435b898a72d020f33be819bca2c610fe75a8f00447666210e01608a9fd5a5891385edc5acef7d`
+4. **Environment:** Development, Preview, Production (select all 3)
+5. Click **"Save"**
+6. **⚠️ IMPORTANT:** This validation key is also placed in `public/validation-key.txt` for domain verification
 
 #### Add `DATABASE_URL` (Private)
 1. Click **"Add New"** button

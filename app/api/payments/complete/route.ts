@@ -311,7 +311,7 @@ export async function POST(request: NextRequest) {
 
         const transactionPromise = (async () => {
           const { error: txError } = await supabaseAdmin
-            .from('transactions')
+            .from('Transaction')
             .insert([{
               task_id: taskId,
               sender_id: employerId, // FIXED: Use employer's UUID from users table

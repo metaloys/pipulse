@@ -53,7 +53,7 @@ export async function serverGetUserById(userId: string) {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('users')
+      .from('User')
       .select('*')
       .eq('id', userId)
       .maybeSingle();
@@ -73,7 +73,7 @@ export async function serverGetUserByUsername(username: string) {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('users')
+      .from('User')
       .select('*')
       .eq('pi_username', username)
       .maybeSingle();
@@ -96,7 +96,7 @@ export async function serverUpdateUser(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('users')
+      .from('User')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', userId)
       .select()
@@ -120,7 +120,7 @@ export async function serverUpdateUserEarnings(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('users')
+      .from('User')
       .select('total_earnings')
       .eq('id', userId)
       .maybeSingle();
@@ -133,7 +133,7 @@ export async function serverUpdateUserEarnings(
     const newEarnings = (data.total_earnings || 0) + amountEarned;
 
     const { data: updated, error: updateError } = await supabase
-      .from('users')
+      .from('User')
       .update({ total_earnings: newEarnings })
       .eq('id', userId)
       .select()
@@ -161,7 +161,7 @@ export async function serverIncrementUserTaskCount(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('users')
+      .from('User')
       .select('total_tasks_completed')
       .eq('id', userId)
       .maybeSingle();
@@ -174,7 +174,7 @@ export async function serverIncrementUserTaskCount(
     const newCount = (data.total_tasks_completed || 0) + count;
 
     const { data: updated, error: updateError } = await supabase
-      .from('users')
+      .from('User')
       .update({ total_tasks_completed: newCount })
       .eq('id', userId)
       .select()
@@ -202,7 +202,7 @@ export async function serverUpdateUserStatsAfterApproval(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('users')
+      .from('User')
       .select('total_earnings, total_tasks_completed')
       .eq('id', userId)
       .maybeSingle();
@@ -218,7 +218,7 @@ export async function serverUpdateUserStatsAfterApproval(
     };
 
     const { data: result, error: updateError } = await supabase
-      .from('users')
+      .from('User')
       .update(updated)
       .eq('id', userId)
       .select()
@@ -247,7 +247,7 @@ export async function serverGetAllTasks() {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('tasks')
+      .from('Task')
       .select('*')
       .eq('task_status', 'available')
       .gt('slots_remaining', 0)
@@ -268,7 +268,7 @@ export async function serverGetTaskById(taskId: string) {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('tasks')
+      .from('Task')
       .select('*')
       .eq('id', taskId)
       .maybeSingle();
@@ -291,7 +291,7 @@ export async function serverUpdateTask(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('tasks')
+      .from('Task')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', taskId)
       .select()
@@ -312,7 +312,7 @@ export async function serverGetTasksByEmployer(employerId: string) {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('tasks')
+      .from('Task')
       .select('*')
       .eq('employer_id', employerId)
       .order('created_at', { ascending: false });
@@ -428,7 +428,7 @@ export async function serverCreateTransaction(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .insert([transaction])
       .select()
       .maybeSingle();
@@ -448,7 +448,7 @@ export async function serverGetUserTransactions(userId: string) {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .select('*')
       .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
       .order('timestamp', { ascending: false });
@@ -468,7 +468,7 @@ export async function serverGetAllTransactions() {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .select('*')
       .order('timestamp', { ascending: false });
 
@@ -490,7 +490,7 @@ export async function serverUpdateTransactionStatus(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .update({
         transaction_status: status,
         updated_at: new Date().toISOString(),
@@ -640,7 +640,7 @@ export async function serverGetAllUsers() {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('users')
+      .from('User')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -661,22 +661,22 @@ export async function serverGetPlatformStats() {
 
     // Total users
     const { count: totalUsers } = await supabase
-      .from('users')
+      .from('User')
       .select('*', { count: 'exact', head: true });
 
     // Total tasks
     const { count: totalTasks } = await supabase
-      .from('tasks')
+      .from('Task')
       .select('*', { count: 'exact', head: true });
 
     // Total transactions
     const { count: totalTransactions } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .select('*', { count: 'exact', head: true });
 
     // Total commission
     const { data: transactions } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .select('pipulse_fee');
 
     const totalCommission = (transactions || []).reduce(
@@ -705,7 +705,7 @@ export async function serverGetTopEarners(limit: number = 10) {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('users')
+      .from('User')
       .select(
         'id, pi_username, level, total_earnings, total_tasks_completed'
       )
@@ -737,7 +737,7 @@ export async function serverGetTopEmployers(limit: number = 10) {
 
     // Fetch all users
     const { data: users, error: usersError } = await supabase
-      .from('users')
+      .from('User')
       .select('id, pi_username, level');
 
     if (usersError || !users) {
@@ -747,7 +747,7 @@ export async function serverGetTopEmployers(limit: number = 10) {
 
     // Fetch all tasks and aggregate by employer
     const { data: tasks, error: tasksError } = await supabase
-      .from('tasks')
+      .from('Task')
       .select('employer_id, pi_reward, slots_available');
 
     if (tasksError || !tasks) {
@@ -800,7 +800,7 @@ export async function serverGetRisingStars(limit: number = 10) {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('users')
+      .from('User')
       .select(
         'id, pi_username, level, total_earnings, total_tasks_completed, created_at'
       )
@@ -854,7 +854,7 @@ export async function serverFixNegativeSlots() {
     
     // Find all tasks with negative slots
     const { data: negativeTasks, error: fetchError } = await supabase
-      .from('tasks')
+      .from('Task')
       .select('id, slots_remaining, task_status')
       .lt('slots_remaining', 0);
 
@@ -872,7 +872,7 @@ export async function serverFixNegativeSlots() {
 
     // Update all to 0 and set status to 'completed'
     const { error: updateError } = await supabase
-      .from('tasks')
+      .from('Task')
       .update({
         slots_remaining: 0,
         task_status: 'completed',
@@ -902,7 +902,7 @@ export async function serverDecrementTaskSlots(taskId: string) {
 
     // Fetch current slots
     const { data: taskData, error: fetchError } = await supabase
-      .from('tasks')
+      .from('Task')
       .select('slots_remaining, task_status')
       .eq('id', taskId)
       .maybeSingle();
@@ -926,7 +926,7 @@ export async function serverDecrementTaskSlots(taskId: string) {
       newSlotsRemaining === 0 ? 'completed' : taskData.task_status;
 
     const { error: updateError } = await supabase
-      .from('tasks')
+      .from('Task')
       .update({
         slots_remaining: newSlotsRemaining,
         task_status: newTaskStatus,
