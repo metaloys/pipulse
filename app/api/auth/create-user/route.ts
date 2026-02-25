@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
         piUid: piUid,
         piUsername: piUsername,
         userRole: 'worker',
-        level: 'Newcomer',
+        level: 'NEWCOMER',
         currentStreak: 0,
         longestStreak: 0,
         totalEarnings: 0,
