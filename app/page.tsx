@@ -10,7 +10,6 @@ import { EmployerDashboard } from '@/components/employer-dashboard';
 import { CreateTaskModal } from '@/components/create-task-modal';
 import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
-import { trpcClient } from '@/lib/trpc/client';
 import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById, updateTask, switchUserRole } from '@/lib/database';
 import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry, UserStats, Task } from '@/lib/types';
 import { 
@@ -158,14 +157,11 @@ export default function HomePage() {
     try {
       console.log(`🔄 Switching user role from ${userRole} to ${newRole}...`);
 
-      // Call tRPC switchRole endpoint
-      const result = await trpcClient.auth.switchRole.mutate({
-        userId: user.id,
-        newRole: newRole as 'WORKER' | 'EMPLOYER',
-      });
+      // Call database function to switch role
+      const result = await switchUserRole(user.id, newRole as 'worker' | 'employer');
 
-      if (result.success && result.user) {
-        console.log(`✅ User role updated to ${newRole}:`, result.user.userRole);
+      if (result) {
+        console.log(`✅ User role updated to ${newRole}:`, result.userRole);
         setUserRole(newRole as UserRole);
 
         // Clear employer tasks if switching to worker
