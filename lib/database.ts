@@ -552,10 +552,10 @@ export async function getUserStats(userId: string) {
     // Fetch all transactions for this user as receiver
     const { data: allTransactions, error: txError } = await supabase
       .from('Transaction')
-      .select('id, amount, pipulse_fee, created_at, transaction_status')
-      .eq('receiver_id', userId)
-      .eq('transaction_status', 'completed')
-      .order('created_at', { ascending: false });
+      .select('id, amount, pipulseFee, createdAt, status')
+      .eq('receiverId', userId)
+      .eq('status', 'completed')
+      .order('createdAt', { ascending: false });
 
     if (txError) {
       console.error('Error fetching transactions for stats:', txError);
@@ -574,21 +574,21 @@ export async function getUserStats(userId: string) {
 
     // Calculate net earnings (amount - fee) for each period
     const totalEarnings = transactions.reduce((sum, t: any) => {
-      const netAmount = (t.amount || 0) - (t.pipulse_fee || 0);
+      const netAmount = (t.amount || 0) - (t.pipulseFee || 0);
       return sum + netAmount;
     }, 0);
 
     const weeklyEarnings = transactions
-      .filter((t: any) => (t.created_at || '') >= sevenDaysAgo)
+      .filter((t: any) => (t.createdAt || '') >= sevenDaysAgo)
       .reduce((sum, t: any) => {
-        const netAmount = (t.amount || 0) - (t.pipulse_fee || 0);
+        const netAmount = (t.amount || 0) - (t.pipulseFee || 0);
         return sum + netAmount;
       }, 0);
 
     const dailyEarnings = transactions
-      .filter((t: any) => (t.created_at || '') >= oneDayAgo)
+      .filter((t: any) => (t.createdAt || '') >= oneDayAgo)
       .reduce((sum, t: any) => {
-        const netAmount = (t.amount || 0) - (t.pipulse_fee || 0);
+        const netAmount = (t.amount || 0) - (t.pipulseFee || 0);
         return sum + netAmount;
       }, 0);
 
@@ -629,9 +629,9 @@ export async function getTodayCommissions() {
   
   const { data, error } = await supabase
     .from('Transaction')
-    .select('pipulse_fee')
-    .eq('transaction_type', 'fee')
-    .eq('transaction_status', 'completed')
+    .select('pipulseFee')
+    .eq('type', 'fee')
+    .eq('status', 'completed')
     .gte('timestamp', today.toISOString());
 
   if (error) {
@@ -639,7 +639,7 @@ export async function getTodayCommissions() {
     return 0;
   }
 
-  return data.reduce((sum, t) => sum + (t.pipulse_fee || 0), 0);
+  return data.reduce((sum, t) => sum + (t.pipulseFee || 0), 0);
 }
 
 /**
@@ -651,9 +651,9 @@ export async function getMonthCommissions() {
   
   const { data, error } = await supabase
     .from('Transaction')
-    .select('pipulse_fee')
-    .eq('transaction_type', 'fee')
-    .eq('transaction_status', 'completed')
+    .select('pipulseFee')
+    .eq('type', 'fee')
+    .eq('status', 'completed')
     .gte('timestamp', monthStart.toISOString());
 
   if (error) {
@@ -661,7 +661,7 @@ export async function getMonthCommissions() {
     return 0;
   }
 
-  return data.reduce((sum, t) => sum + (t.pipulse_fee || 0), 0);
+  return data.reduce((sum, t) => sum + (t.pipulseFee || 0), 0);
 }
 
 /**
