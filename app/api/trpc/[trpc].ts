@@ -9,4 +9,5 @@ const handler = (req: Request) =>
     createContext: () => ({}),
   })
 
+// Export both methods for Next.js App Router
 export { handler as GET, handler as POST }
