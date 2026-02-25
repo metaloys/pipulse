@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
     if (submissionId) {
       console.log(`\n🔒 [PRICE PROTECTION] Fetching agreed_reward from submission: ${submissionId}`);
       const { data: submissionData, error: submissionError } = await supabaseAdmin
-        .from('task_submissions')
+        .from('Submission')
         .select('agreed_reward')
         .eq('id', submissionId)
         .maybeSingle();
@@ -283,7 +283,7 @@ export async function POST(request: NextRequest) {
         console.log(`\n✓ [STEP 4] Preparing submission status update: ${submissionId}`);
         const submissionUpdatePromise = (async () => {
           const { error: submissionError } = await supabaseAdmin
-            .from('task_submissions')
+            .from('Submission')
             .update({
               submission_status: 'approved',
               reviewed_at: new Date().toISOString(),
@@ -431,7 +431,7 @@ export async function POST(request: NextRequest) {
           // Try to log to recovery table (but don't fail if it doesn't exist yet)
           try {
             const { error: recoveryError } = await supabaseAdmin
-              .from('failed_completions')
+              .from('FailedCompletion')
               .insert([recoveryEntry]);
 
             if (recoveryError) {

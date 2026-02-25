@@ -336,7 +336,7 @@ export async function serverGetTaskSubmissions(taskId: string) {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .select('*')
       .eq('task_id', taskId)
       .order('submitted_at', { ascending: false });
@@ -356,7 +356,7 @@ export async function serverGetWorkerSubmissions(workerId: string) {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .select('*')
       .eq('worker_id', workerId)
       .order('submitted_at', { ascending: false });
@@ -379,7 +379,7 @@ export async function serverUpdateSubmission(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', submissionId)
       .select()
@@ -402,7 +402,7 @@ export async function serverCreateSubmission(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .insert([submission])
       .select()
       .maybeSingle();
@@ -518,7 +518,7 @@ export async function serverGetAllDisputes() {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('disputes')
+      .from('Dispute')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -537,7 +537,7 @@ export async function serverGetPendingDisputes() {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('disputes')
+      .from('Dispute')
       .select('*')
       .eq('dispute_status', 'pending')
       .order('created_at', { ascending: false });
@@ -562,7 +562,7 @@ export async function serverResolveDispute(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('disputes')
+      .from('Dispute')
       .update({
         dispute_status: 'resolved',
         admin_ruling: ruling,
@@ -596,7 +596,7 @@ export async function serverCreateNotification(
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('notifications')
+      .from('Notification')
       .insert([notification])
       .select()
       .maybeSingle();
@@ -616,7 +616,7 @@ export async function serverGetUserNotifications(userId: string) {
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('notifications')
+      .from('Notification')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
@@ -966,7 +966,7 @@ export async function serverGetPlatformSetting(key: string): Promise<string | nu
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('platform_settings')
+      .from('PlatformSettings')
       .select('value')
       .eq('key', key)
       .maybeSingle();
@@ -1010,7 +1010,7 @@ export async function serverGetAllPlatformSettings(): Promise<Record<string, str
   try {
     const supabase = getServerSupabase();
     const { data, error } = await supabase
-      .from('platform_settings')
+      .from('PlatformSettings')
       .select('key, value');
 
     if (error) {
@@ -1042,7 +1042,7 @@ export async function serverUpdatePlatformSetting(
 
     // Try to update first
     const { error: updateError } = await supabase
-      .from('platform_settings')
+      .from('PlatformSettings')
       .update({
         value,
         updated_at: new Date().toISOString(),
@@ -1052,7 +1052,7 @@ export async function serverUpdatePlatformSetting(
     // If update failed with no rows, insert instead
     if (updateError && updateError.code === 'PGRST116') {
       const { error: insertError } = await supabase
-        .from('platform_settings')
+        .from('PlatformSettings')
         .insert([
           {
             key,

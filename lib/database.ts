@@ -879,7 +879,7 @@ export async function hasActiveDispute(submissionId: string) {
  */
 export async function getPendingDisputeCount() {
   const { data, error } = await supabase
-    .from('disputes')
+    .from('Dispute')
     .select('*', { count: 'exact', head: true })
     .eq('dispute_status', 'pending');
 
@@ -900,7 +900,7 @@ export async function getPendingDisputeCount() {
 export async function getUnreadNotificationCount(userId: string): Promise<number> {
   try {
     const { count, error } = await supabase
-      .from('notifications')
+      .from('Notification')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('is_read', false);
@@ -923,7 +923,7 @@ export async function getNotifications(
 ): Promise<any[]> {
   try {
     const { data, error } = await supabase
-      .from('notifications')
+      .from('Notification')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
@@ -946,7 +946,7 @@ export async function getUnreadNotifications(
 ): Promise<any[]> {
   try {
     const { data, error } = await supabase
-      .from('notifications')
+      .from('Notification')
       .select('*')
       .eq('user_id', userId)
       .eq('is_read', false)
@@ -967,7 +967,7 @@ export async function getUnreadNotifications(
 export async function markNotificationAsRead(notificationId: string): Promise<boolean> {
   try {
     const { error } = await supabase
-      .from('notifications')
+      .from('Notification')
       .update({ is_read: true, read_at: new Date().toISOString() })
       .eq('id', notificationId);
 
@@ -985,7 +985,7 @@ export async function markNotificationAsRead(notificationId: string): Promise<bo
 export async function markAllNotificationsAsRead(userId: string): Promise<boolean> {
   try {
     const { error } = await supabase
-      .from('notifications')
+      .from('Notification')
       .update({ is_read: true, read_at: new Date().toISOString() })
       .eq('user_id', userId)
       .eq('is_read', false);
@@ -1016,7 +1016,7 @@ export async function submitTaskSubmission(input: {
     const revisionNumber = input.revisionNumber || 1;
 
     const { data, error } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .insert({
         task_id: input.taskId,
         worker_id: input.workerId,
@@ -1061,7 +1061,7 @@ export async function approveTaskSubmission(input: {
   try {
     // Update submission status
     const { error: updateError } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .update({
         submission_status: 'approved',
         reviewed_at: new Date().toISOString(),
@@ -1102,7 +1102,7 @@ export async function rejectTaskSubmission(input: {
   try {
     // Update submission status
     const { error: updateError } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .update({
         submission_status: 'rejected',
         rejection_reason: input.rejectionReason,
@@ -1145,7 +1145,7 @@ export async function requestTaskRevision(input: {
   try {
     // Update submission status to revision_requested
     const { error: updateError } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .update({
         submission_status: 'revision_requested',
         revision_requested_reason: input.revisionReason,
@@ -1193,7 +1193,7 @@ export async function getWorkerSubmissionsWithFilters(
 ): Promise<DatabaseTaskSubmission[]> {
   try {
     let query = supabase
-      .from('task_submissions')
+      .from('Submission')
       .select('*')
       .eq('worker_id', workerId);
 
@@ -1276,7 +1276,7 @@ export async function triggerAutoApprovals(): Promise<{
 
     // Count auto-approved submissions
     const { count } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .select('*', { count: 'exact', head: true })
       .eq('submission_status', 'approved')
       .gte('reviewed_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());

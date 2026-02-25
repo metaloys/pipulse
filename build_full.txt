@@ -1,0 +1,83 @@
+node.exe : GÜá `eslint` configuration in next.config.mjs is no longer 
+supported. See more info here: 
+https://nextjs.org/docs/app/api-reference/cli/next#next-lint-options
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (GÜá `eslint` co...xt-lint-options 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+GÜá Invalid next.config.mjs options detected: 
+GÜá     Unrecognized key(s) in object: 'eslint'
+GÜá See more info here: https://nextjs.org/docs/messages/invalid-next-config
+GÜá Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of 
+C:\Users\PK-LUX\Desktop\package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or 
+consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopac
+k#root-directory for more information.
+ Detected additional lockfiles: 
+   * C:\Users\PK-LUX\Desktop\pipulse\pnpm-lock.yaml
+
+Gû¦ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local, .env
+
+  Creating an optimized production build ...
+G£ô Compiled successfully in 37.5s
+  Skipping validation of types
+GÜá Minimum recommended TypeScript version is v5.1.0, older versions can 
+potentially be incompatible with Next.js. Detected: 5.0.2
+  Collecting page data using 3 workers ...
+=ƒöÉ Using server-side Supabase client (service role key)
+  Generating static pages using 3 workers (0/35) ...
+  Generating static pages using 3 workers (8/35) 
+=ƒöÉ Using server-side Supabase client (service role key)
+  Generating static pages using 3 workers (17/35) 
+  Generating static pages using 3 workers (26/35) 
+G£ô Generating static pages using 3 workers (35/35) in 2.4s
+  Finalizing page optimization ...
+
+Route (app)
+Göî Gùï /
+Gö£ Gùï /_not-found
+Gö£ Gùï /admin
+Gö£ Gùï /admin/analytics
+Gö£ Gùï /admin/dashboard
+Gö£ Gùï /admin/disputes
+Gö£ Gùï /admin/settings
+Gö£ Gùï /admin/submissions
+Gö£ Gùï /admin/tasks
+Gö£ Gùï /admin/transactions
+Gö£ Gùï /admin/users
+Gö£ ¦Æ /api/admin/analytics
+Gö£ ¦Æ /api/admin/cleanup/fix-slots
+Gö£ ¦Æ /api/admin/debug
+Gö£ ¦Æ /api/admin/disputes
+Gö£ ¦Æ /api/admin/disputes/resolve
+Gö£ ¦Æ /api/admin/settings
+Gö£ ¦Æ /api/admin/stats
+Gö£ ¦Æ /api/admin/submissions
+Gö£ ¦Æ /api/admin/submissions/approve
+Gö£ ¦Æ /api/admin/submissions/reject
+Gö£ ¦Æ /api/admin/tasks
+Gö£ ¦Æ /api/admin/tasks/remove
+Gö£ ¦Æ /api/admin/tasks/toggle-featured
+Gö£ ¦Æ /api/admin/transactions
+Gö£ ¦Æ /api/admin/users
+Gö£ ¦Æ /api/admin/users/update-status
+Gö£ ¦Æ /api/admin/verify-password
+Gö£ ¦Æ /api/auth/create-user
+Gö£ ¦Æ /api/leaderboard
+Gö£ ¦Æ /api/notifications
+Gö£ ¦Æ /api/payments/approve
+Gö£ ¦Æ /api/payments/complete
+Gö£ ¦Æ /api/submissions
+Göö ¦Æ /api/user
+
+
+Gùï  (Static)   prerendered as static content
+¦Æ  (Dynamic)  server-rendered on demand
+
+

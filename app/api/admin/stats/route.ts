@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
     // Get pending submissions count
     console.log('📥 [ADMIN STATS] Counting pending submissions...');
     const { count: pendingSubmissions, error: pendingError } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .select('*', { count: 'exact', head: true })
       .eq('submission_status', 'submitted');
 
