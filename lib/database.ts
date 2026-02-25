@@ -311,8 +311,8 @@ export async function getTasksByEmployer(employerId: string) {
   const { data, error } = await supabase
     .from('Task')
     .select('*')
-    .eq('employer_id', employerId)
-    .order('created_at', { ascending: false });
+    .eq('employerId', employerId)
+    .order('createdAt', { ascending: false });
 
   if (error) {
     console.error('Error fetching employer tasks:', error);

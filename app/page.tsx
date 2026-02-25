@@ -179,13 +179,7 @@ export default function HomePage() {
   };
 
   const handleAcceptTask = (task: DatabaseTask | Task) => {
-    // Only set if it's a DatabaseTask (has pi_reward property)
-    if ('pi_reward' in task) {
-      setSelectedTask(task as DatabaseTask);
-    } else {
-      // Convert Task to DatabaseTask or ignore
-      console.warn('Task does not have required DatabaseTask properties');
-    }
+    setSelectedTask(task as DatabaseTask);
     setIsSubmissionModalOpen(true);
   };
 
