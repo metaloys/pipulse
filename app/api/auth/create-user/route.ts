@@ -14,32 +14,19 @@ export async function POST(request: NextRequest) {
     const { piUid, piUsername } = await request.json();
 
     if (!piUid || !piUsername) {
-      return NextResponse.json({ error: 'Missing piUid or piUsername' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
-    // Check by id
-    const { data: byId } = await supabase
+    const { data: existing } = await supabase
       .from('User')
       .select('*')
-      .eq('id', piUid)
+      .or(`id.eq.${piUid},piUsername.eq.${piUsername}`)
       .maybeSingle();
 
-    if (byId) {
-      return NextResponse.json({ user: byId }, { status: 200 });
+    if (existing) {
+      return NextResponse.json({ user: existing }, { status: 200 });
     }
 
-    // Check by piUsername
-    const { data: byUsername } = await supabase
-      .from('User')
-      .select('*')
-      .eq('piUsername', piUsername)
-      .maybeSingle();
-
-    if (byUsername) {
-      return NextResponse.json({ user: byUsername }, { status: 200 });
-    }
-
-    // Create new user - include ALL required columns
     const { data: newUser, error: insertError } = await supabase
       .from('User')
       .insert([{
@@ -57,9 +44,8 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (insertError) {
-      console.error('Insert error:', JSON.stringify(insertError));
       return NextResponse.json(
-        { error: insertError.message, details: insertError },
+        { error: insertError.message, code: insertError.code },
         { status: 500 }
       );
     }
@@ -67,7 +53,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ user: newUser }, { status: 200 });
 
   } catch (error) {
-    console.error('Unexpected error:', String(error));
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
