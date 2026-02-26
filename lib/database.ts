@@ -183,7 +183,13 @@ export async function switchUserRole(userId: string, newRole: 'worker' | 'employ
 export async function getAllTasks() {
   const { data, error } = await supabase
     .from('Task')
-    .select('*')
+    .select(`
+      *,
+      employer:User!employerId(
+        id,
+        piUsername
+      )
+    `)
     .eq('taskStatus', 'available')
     .gt('slotsRemaining', 0)  // Only show tasks with available slots
     .order('createdAt', { ascending: false });
@@ -198,7 +204,13 @@ export async function getAllTasks() {
 export async function getTasksByCategory(category: string) {
   const { data, error } = await supabase
     .from('Task')
-    .select('*')
+    .select(`
+      *,
+      employer:User!employerId(
+        id,
+        piUsername
+      )
+    `)
     .eq('category', category)
     .eq('taskStatus', 'available')
     .gt('slotsRemaining', 0)  // Only show tasks with available slots
@@ -298,7 +310,13 @@ export async function deleteTask(taskId: string) {
 export async function getTasksByEmployer(employerId: string) {
   const { data, error } = await supabase
     .from('Task')
-    .select('*')
+    .select(`
+      *,
+      employer:User!employerId(
+        id,
+        piUsername
+      )
+    `)
     .eq('employerId', employerId)
     .order('createdAt', { ascending: false });
 
