@@ -221,7 +221,7 @@ export default function HomePage() {
       console.log('✅ [STEP 2] Proof submitted, awaiting employer review');
       
       // STEP 3: Create the submission record
-      console.log(`✅ [STEP 3] Payment confirmed. Creating submission record...`);
+      console.log(`✅ [STEP 3] Creating submission record...`);
       const submission = await submitTask({
         task_id: taskId,
         worker_id: workerId,
