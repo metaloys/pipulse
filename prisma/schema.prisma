@@ -1,0 +1,410 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// USERS - Authenticated Pi Network users with role switching capability
+// ============================================================================
+
+model User {
+  id                  String          @id @default(cuid())
+  piUid               String          @unique
+  piUsername          String          @unique
+  piWallet            String?         @unique
+  userRole            UserRole        @default(WORKER)
+  level               Level           @default(NEWCOMER)
+  currentStreak       Int             @default(0)
+  longestStreak       Int             @default(0)
+  lastActiveDate      DateTime        @default(now())
+  totalEarnings       Decimal         @default(0) @db.Decimal(15,8)
+  totalTasksCompleted Int             @default(0)
+  status              UserStatus      @default(ACTIVE)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  deletedAt           DateTime?       // Soft delete
+
+  // Relations
+  tasks               Task[]
+  submissions         Submission[]
+  sentTransactions    Transaction[]   @relation("sender")
+  receivedTransactions Transaction[]  @relation("receiver")
+  disputes            Dispute[]
+  auditLogs           AuditLog[]
+  streak              Streak?
+
+  @@index([userRole])
+  @@index([status])
+  @@index([piUsername])
+  @@index([piUid])
+}
+
+enum UserRole {
+  WORKER
+  EMPLOYER
+  ADMIN
+}
+
+enum Level {
+  NEWCOMER
+  ESTABLISHED
+  ADVANCED
+  ELITE_PIONEER
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+  SUSPENDED
+}
+
+// ============================================================================
+// TASKS - Job postings from employers
+// ============================================================================
+
+model Task {
+  id              String          @id @default(cuid())
+  title           String         
+  description     String         
+  category        TaskCategory
+  instructions    String         
+  proofType       ProofType
+  piReward        Decimal         @db.Decimal(15,8)
+  timeEstimate    Int             // In minutes
+  deadline        DateTime
+  slotsAvailable  Int
+  slotsRemaining  Int
+  taskStatus      TaskStatus      @default(AVAILABLE)
+  employerId      String
+  employer        User            @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  parentTaskId    String?         // Tracks if this is a repost of another task
+  parentTask      Task?           @relation("repostLineage", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  reposts         Task[]          @relation("repostLineage")
+  views           Int             @default(0)
+  isFeatured      Boolean         @default(false)
+  featuredUntil   DateTime?
+  deletedAt       DateTime?       // Soft delete
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  submissions     Submission[]
+  versions        TaskVersion[]
+  slots           SlotLock[]
+  transactions    Transaction[]
+  disputes        Dispute[]
+
+  @@index([employerId])
+  @@index([taskStatus])
+  @@index([category])
+  @@index([deadline])
+  @@index([deletedAt])
+  @@index([parentTaskId])
+}
+
+enum TaskStatus {
+  AVAILABLE
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskCategory {
+  APP_TESTING
+  SURVEY
+  TRANSLATION
+  AUDIO_RECORDING
+  PHOTO_CAPTURE
+  CONTENT_REVIEW
+  DATA_LABELING
+}
+
+enum ProofType {
+  TEXT
+  PHOTO
+  AUDIO
+  FILE
+}
+
+// ============================================================================
+// TASK VERSIONS - Audit trail of task edits
+// ============================================================================
+
+model TaskVersion {
+  id          String          @id @default(cuid())
+  taskId      String
+  task        Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title       String?        
+  description String?        
+  instructions String?       
+  piReward    Decimal?       @db.Decimal(15,8)
+  slotsAvailable Int?
+  deadline    DateTime?
+  changedBy   String          // User ID who made the change
+  createdAt   DateTime        @default(now())
+
+  @@index([taskId])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// SLOT LOCKS - Prevent double-acceptance of same task slot
+// ============================================================================
+
+model SlotLock {
+  id        String          @id @default(cuid())
+  taskId    String
+  task      Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  workerId  String
+  lockedAt  DateTime        @default(now())
+  expiresAt DateTime        // locked_at + 2 hours
+
+  @@index([taskId, workerId])
+  @@index([expiresAt])
+  @@unique([taskId, workerId])
+}
+
+// ============================================================================
+// SUBMISSIONS - Worker work submissions
+// ============================================================================
+
+model Submission {
+  id                String          @id @default(cuid())
+  taskId            String
+  task              Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  workerId          String
+  worker            User            @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  proofContent      String         
+  submissionType    ProofType
+  status            SubmissionStatus @default(SUBMITTED)
+  agreedReward      Decimal         @db.Decimal(15,8)
+  rejectionReason   String?        
+  revisionNumber    Int             @default(0)
+  revisionReason    String?        
+  revisionRequestedAt DateTime?
+  resubmittedAt     DateTime?
+  adminNotes        String?        
+  acceptedAt        DateTime?       // When worker accepted task and slot lock started
+  submittedAt       DateTime        @default(now())
+  reviewedAt        DateTime?
+  autoApproved      Boolean         @default(false)
+  deletedAt         DateTime?       // Soft delete
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  // Relations
+  dispute           Dispute?
+  transaction       Transaction?
+
+  @@index([taskId])
+  @@index([workerId])
+  @@index([status])
+  @@index([deletedAt])
+  @@unique([taskId, workerId])
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  REVISION_REQUESTED
+  REVISION_RESUBMITTED
+  APPROVED
+  REJECTED
+  DISPUTED
+}
+
+// ============================================================================
+// TRANSACTIONS - Payment records and money flow
+// ============================================================================
+
+model Transaction {
+  id              String          @id @default(cuid())
+  senderId        String?
+  sender          User?           @relation("sender", fields: [senderId], references: [id], onDelete: SetNull)
+  receiverId      String?
+  receiver        User?           @relation("receiver", fields: [receiverId], references: [id], onDelete: SetNull)
+  amount          Decimal         @db.Decimal(15,8)
+  pipulseFee      Decimal         @db.Decimal(5,2)
+  taskId          String?
+  task            Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  submissionId    String?         @unique
+  submission      Submission?     @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  type            TransactionType
+  status          TransactionStatus
+  piBlockchainTxId String?
+  failedAt        DateTime?
+  timestamp       DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([taskId])
+  @@index([submissionId])
+  @@index([status])
+  @@index([type])
+}
+
+enum TransactionType {
+  PAYMENT
+  REFUND
+  FEE
+  BONUS
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+// ============================================================================
+// FAILED COMPLETIONS - Payment recovery system
+// ============================================================================
+
+model FailedCompletion {
+  id            String          @id @default(cuid())
+  submissionId  String
+  workerId      String
+  amount        Decimal         @db.Decimal(15,8)
+  error         String         
+  attempts      Int             @default(1)
+  nextRetry     DateTime?
+  resolvedAt    DateTime?
+  resolution    String?        
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([submissionId])
+  @@index([nextRetry])
+}
+
+// ============================================================================
+// DISPUTES - Unfair rejection appeals
+// ============================================================================
+
+model Dispute {
+  id            String          @id @default(cuid())
+  submissionId  String          @unique
+  submission    Submission      @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  taskId        String
+  task          Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  workerId      String
+  worker        User            @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  reason        String         
+  evidence      String?        
+  status        DisputeStatus   @default(PENDING)
+  ruling        DisputeRuling?
+  adminNotes    String?        
+  resolvedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([status])
+  @@index([taskId])
+  @@index([workerId])
+}
+
+enum DisputeStatus {
+  PENDING
+  RESOLVED
+}
+
+enum DisputeRuling {
+  IN_FAVOR_OF_WORKER
+  IN_FAVOR_OF_EMPLOYER
+}
+
+// ============================================================================
+// NOTIFICATIONS - User alerts and messages
+// ============================================================================
+
+model Notification {
+  id          String              @id @default(cuid())
+  userId      String
+  title       String
+  body        String             
+  actionUrl   String?
+  type        NotificationType
+  read        Boolean             @default(false)
+  deletedAt   DateTime?           // Soft delete
+  createdAt   DateTime            @default(now())
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  SUBMISSION_SUBMITTED
+  SUBMISSION_REJECTED
+  REVISION_REQUESTED
+  REVISION_RESUBMITTED
+  PAYMENT_RECEIVED
+  DISPUTE_CREATED
+  DISPUTE_RESOLVED
+  TASK_UPDATED
+  AUTO_APPROVED
+}
+
+// ============================================================================
+// AUDIT LOGS - Track all admin actions for compliance
+// ============================================================================
+
+model AuditLog {
+  id          String          @id @default(cuid())
+  action      String          // "BAN_USER", "APPROVE_SUBMISSION", "RESOLVE_DISPUTE", etc.
+  userId      String?
+  user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  targetId    String?         // ID of the thing being acted upon
+  targetType  String?         // Type: "user", "submission", "dispute", etc.
+  details     Json?           // Additional context
+  ipAddress   String?
+  createdAt   DateTime        @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([targetId])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// PLATFORM SETTINGS - Admin configuration
+// ============================================================================
+
+model PlatformSettings {
+  id                      String          @id @default(cuid())
+  commissionRate          Decimal         @default(15) @db.Decimal(5,2) // Percentage: 0-100
+  maintenanceMode         Boolean         @default(false)
+  maxTaskDeadlineDays     Int             @default(30)
+  minTaskTitle            Int             @default(10)
+  maxTaskTitle            Int             @default(100)
+  slotLockMinutes         Int             @default(120) // 2 hours default
+  autoApprovalHours       Int             @default(48)
+  maxRevisionAttempts     Int             @default(1)  // Workers get ONE revision opportunity only
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+}
+
+// ============================================================================
+// STREAKS - Gamification system
+// ============================================================================
+
+model Streak {
+  id                  String          @id @default(cuid())
+  userId              String          @unique
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStreak       Int             @default(0)
+  longestStreak       Int             @default(0)
+  lastActiveDate      DateTime        @default(now())
+  streakBonusEarned   Boolean         @default(false)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([userId])
+}

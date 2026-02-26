@@ -18,18 +18,18 @@ export async function GET(request: NextRequest) {
 
     // Get top earners
     const { data: topEarners, error: earnersError } = await supabase
-      .from('users')
-      .select('pi_username, total_earnings, total_tasks_completed')
-      .order('total_earnings', { ascending: false })
+      .from('User')
+      .select('piUsername, totalEarnings, totalTasksCompleted')
+      .order('totalEarnings', { ascending: false })
       .limit(10);
 
     if (earnersError) throw earnersError;
 
     // Get top workers by task count
     const { data: topWorkers, error: workersError } = await supabase
-      .from('users')
-      .select('pi_username, total_earnings, total_tasks_completed')
-      .order('total_tasks_completed', { ascending: false })
+      .from('User')
+      .select('piUsername, totalEarnings, totalTasksCompleted')
+      .order('totalTasksCompleted', { ascending: false })
       .limit(10);
 
     if (workersError) throw workersError;
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const { data: transactions, error: transError } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .select('created_at, pipulse_fee')
       .gte('created_at', sevenDaysAgo.toISOString());
 

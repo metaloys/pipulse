@@ -37,11 +37,16 @@ export function TaskCard({ task, onAccept }: TaskCardProps) {
   const slotsRemaining = 'slotsRemaining' in task ? task.slotsRemaining : task.slots_remaining;
   const piReward = 'piReward' in task ? task.piReward : task.pi_reward;
   const timeEstimate = 'timeEstimate' in task ? task.timeEstimate : task.time_estimate;
-  const employerName = 'employerName' in task ? task.employerName : 'Unknown Employer';
-  const createdAt = 'createdAt' in task ? task.createdAt : task.created_at;
-  const updatedAt = 'updatedAt' in task ? task.updatedAt : task.updated_at;
+  const employer = 'employer' in task ? (task as any).employer : null;
+  const employerName = employer?.piUsername || 'Unknown Employer';
+  const createdAt = 'created_at' in task ? (task as DatabaseTask).created_at : null;
+  const updatedAt = 'updated_at' in task ? (task as DatabaseTask).updated_at : null;
   
-  const slotsPercentage = ((slots - slotsRemaining) / slots) * 100;
+  // Calculate progress percentage safely
+  const slotsAvailable = slots ?? 1;
+  const slotsRemain = slotsRemaining ?? 0;
+  const filled = Math.max(0, (slotsAvailable - slotsRemain));
+  const slotsPercentage = Math.round((filled / slotsAvailable) * 100);
 
   // Check if task was recently updated (updated_at > created_at)
   const wasUpdated = updatedAt && createdAt && new Date(updatedAt) > new Date(createdAt);
@@ -90,7 +95,7 @@ export function TaskCard({ task, onAccept }: TaskCardProps) {
       <div className="mb-4">
         <div className="flex justify-between text-xs text-muted-foreground mb-1">
           <span>Progress</span>
-          <span>{Math.round(slotsPercentage)}% filled</span>
+          <span>{slotsPercentage}% filled</span>
         </div>
         <div className="w-full bg-muted rounded-full h-1.5">
           <div 

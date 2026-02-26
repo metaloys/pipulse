@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient();
 
     const { error } = await supabase
-      .from('tasks')
+      .from('Task')
       .update({ is_featured: isFeatured })
       .eq('id', taskId);
 

@@ -11,7 +11,7 @@ import { CreateTaskModal } from '@/components/create-task-modal';
 import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
 import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById, updateTask, switchUserRole } from '@/lib/database';
-import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry, UserStats } from '@/lib/types';
+import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry, UserStats, Task } from '@/lib/types';
 import { 
   Coins, 
   CheckCircle, 
@@ -33,14 +33,26 @@ const EMPTY_STATS: UserStats = {
 };
 
 export default function HomePage() {
-  const { userData } = usePiAuth();
+  const { userData, user } = usePiAuth();
   
-  const [userRole, setUserRole] = useState<UserRole>('worker');
+  // Get userRole from tRPC user object if available, otherwise default to 'worker'
+  const [userRole, setUserRole] = useState<UserRole>((user?.userRole as UserRole) || 'worker');
   const [selectedCategory, setSelectedCategory] = useState<TaskCategory | 'all'>('all');
   const [tasks, setTasks] = useState<DatabaseTask[]>([]);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [employerTasks, setEmployerTasks] = useState<DatabaseTask[]>([]);
-  const [userStats, setUserStats] = useState<UserStats>(EMPTY_STATS);
+  
+  // Initialize userStats from tRPC user object
+  const [userStats, setUserStats] = useState<UserStats>({
+    dailyEarnings: 0,
+    weeklyEarnings: 0,
+    totalEarnings: user?.totalEarnings || 0,
+    tasksCompleted: user?.totalTasksCompleted || 0,
+    currentStreak: user?.currentStreak || 0,
+    level: user?.level || 'NEWCOMER',
+    availableTasksCount: 0,
+  });
+  
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<DatabaseTask | null>(null);
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
@@ -49,12 +61,20 @@ export default function HomePage() {
   // Load user's current role from database
   useEffect(() => {
     const loadUserRole = async () => {
+      // If we have the full user object from tRPC, use it directly
+      if (user?.id && user?.userRole) {
+        console.log('📋 User role from tRPC context:', user.userRole);
+        setUserRole(user.userRole as UserRole);
+        return;
+      }
+      
+      // Fallback for old flow (if needed)
       if (userData?.id) {
         try {
-          const user = await getUserById(userData.id);
-          if (user) {
-            console.log('📋 User role from database:', user.user_role);
-            setUserRole(user.user_role);
+          const fetchedUser = await getUserById(userData.id);
+          if (fetchedUser) {
+            console.log('📋 User role from database:', fetchedUser.user_role);
+            setUserRole(fetchedUser.user_role);
           }
         } catch (error) {
           console.error('Error loading user role:', error);
@@ -62,7 +82,7 @@ export default function HomePage() {
       }
     };
     loadUserRole();
-  }, [userData?.id]);
+  }, [user, userData?.id]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -76,7 +96,7 @@ export default function HomePage() {
         // (a user shouldn't accept their own tasks)
         let availableTasks = tasksData;
         if (userRole === 'worker' && userData?.id) {
-          availableTasks = tasksData.filter(task => task.employer_id !== userData.id);
+          availableTasks = tasksData.filter(task => task.employerId !== userData.id);
           console.log(`📋 Filtered tasks: ${tasksData.length} total, ${availableTasks.length} available for worker (excluded ${tasksData.length - availableTasks.length} own tasks)`);
         }
         
@@ -86,9 +106,9 @@ export default function HomePage() {
         const leaderboardData = await getLeaderboard(10);
         const formattedLeaderboard = leaderboardData.map((entry, index) => ({
           rank: index + 1,
-          username: entry.pi_username,
-          earnings: entry.total_earnings,
-          tasksCompleted: entry.total_tasks_completed,
+          username: entry.piUsername,
+          earnings: entry.totalEarnings,
+          tasksCompleted: entry.totalTasksCompleted,
         }));
         setLeaderboardEntries(formattedLeaderboard);
 
@@ -129,7 +149,7 @@ export default function HomePage() {
   }, [userData?.id, userRole]);
 
   const handleRoleSwitch = async () => {
-    if (!userData?.id || isRoleSwitching) return;
+    if (!user?.id || isRoleSwitching) return;
 
     setIsRoleSwitching(true);
     const newRole = userRole === 'worker' ? 'employer' : 'worker';
@@ -137,11 +157,12 @@ export default function HomePage() {
     try {
       console.log(`🔄 Switching user role from ${userRole} to ${newRole}...`);
 
-      const result = await switchUserRole(userData.id, newRole);
+      // Call database function to switch role
+      const result = await switchUserRole(user.id, newRole as 'worker' | 'employer');
 
       if (result) {
-        console.log(`✅ User role updated to ${newRole}:`, result.user_role);
-        setUserRole(newRole);
+        console.log(`✅ User role updated to ${newRole}:`, result.userRole);
+        setUserRole(newRole as UserRole);
 
         // Clear employer tasks if switching to worker
         if (newRole === 'worker') {
@@ -157,13 +178,20 @@ export default function HomePage() {
     }
   };
 
-  const handleAcceptTask = (task: DatabaseTask) => {
-    setSelectedTask(task);
+  const handleAcceptTask = (task: DatabaseTask | Task) => {
+    setSelectedTask(task as DatabaseTask);
     setIsSubmissionModalOpen(true);
   };
 
   const handleSubmitTask = async (taskId: string, proof: string, submissionType: 'text' | 'photo' | 'audio' | 'file') => {
     try {
+      console.log('Task fields:', JSON.stringify({
+        piReward: undefined, // Will check after we get currentTask
+        pi_reward: undefined,
+        reward: undefined,
+        allKeys: undefined
+      }));
+
       // Get the worker ID from Pi Auth context
       if (!userData?.id) {
         throw new Error('User not authenticated. Please login with Pi Network.');
@@ -178,8 +206,22 @@ export default function HomePage() {
       if (!currentTask) {
         throw new Error('Task not found');
       }
+
+      console.log('Task fields:', JSON.stringify({
+        piReward: (currentTask as any).piReward,
+        pi_reward: (currentTask as any).pi_reward,
+        reward: (currentTask as any).reward,
+        allKeys: Object.keys(currentTask)
+      }));
+
+      console.log('🔍 Task object:', JSON.stringify(currentTask));
       
-      // 1. Create the submission record with agreed_reward for price protection
+      // STEP 2: Submit proof without payment (escrow model)
+      // Worker submits proof → employer approves → system releases funds from escrow
+      console.log('✅ [STEP 2] Proof submitted, awaiting employer review');
+      
+      // STEP 3: Create the submission record
+      console.log(`✅ [STEP 3] Creating submission record...`);
       const submission = await submitTask({
         task_id: taskId,
         worker_id: workerId,
@@ -187,32 +229,38 @@ export default function HomePage() {
         submission_type: submissionType,
         submission_status: 'submitted',
         rejection_reason: null,
-        agreed_reward: currentTask.pi_reward, // Store the price worker agreed to
+        revision_number: 0,
+        revision_requested_reason: null,
+        revision_requested_at: null,
+        resubmitted_at: null,
+        employer_notes: null,
+        agreed_reward: currentTask.piReward ?? currentTask.pi_reward ?? 0, // Store the price worker agreed to
         submitted_at: new Date().toISOString(),
         reviewed_at: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       });
 
       if (!submission) {
         throw new Error('Failed to save submission');
       }
 
-      console.log(`✅ Task submitted successfully with ID: ${submission.id}`);
+      console.log(`✅ [STEP 4] Task submission created with ID: ${submission.id}`);
       
-      // 2. Decrement the slots_remaining for this task
-      const newSlotsRemaining = Math.max(0, currentTask.slots_remaining - 1);
+      // STEP 4: Decrement the slotsRemaining for this task
+      console.log(`📉 [STEP 5] Decrementing task slots...`);
+      const newSlotsRemaining = Math.max(0, currentTask.slotsRemaining - 1);
       await updateTask(taskId, {
-        slots_remaining: newSlotsRemaining,
+        slotsRemaining: newSlotsRemaining,
       });
-      console.log(`📉 Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
+      console.log(`✅ [STEP 5] Task slots updated: ${currentTask.slotsRemaining} → ${newSlotsRemaining}`);
       
-      // 3. Refresh tasks after submission
+      // STEP 5: Refresh tasks after submission
+      console.log(`🔄 [STEP 6] Refreshing task list...`);
       const updatedTasks = await getAllTasks();
       const availableTasks = userRole === 'worker' && userData?.id 
-        ? updatedTasks.filter(t => t.employer_id !== userData.id)
+        ? updatedTasks.filter(t => t.employerId !== userData.id)
         : updatedTasks;
       setTasks(availableTasks);
+      console.log(`✅ [STEP 6] Task acceptance complete!`);
       
     } catch (error) {
       console.error('Error submitting task:', error);
@@ -319,7 +367,7 @@ export default function HomePage() {
               </div>
 
               <div className="space-y-6">
-                <Leaderboard entries={leaderboardEntries} />
+                <Leaderboard />
                 
                 {/* Quick Stats */}
                 <div className="glassmorphism p-5 border-white/10 rounded-lg">
@@ -377,12 +425,12 @@ export default function HomePage() {
               />
               <StatsCard
                 label="Total Reward"
-                value={`${employerTasks.reduce((sum, t) => sum + t.pi_reward, 0)} π`}
+                value={`${employerTasks.reduce((sum, t) => sum + (t.piReward ?? t.pi_reward ?? 0), 0)} π`}
                 icon={<Coins className="w-8 h-8" />}
               />
               <StatsCard
                 label="Slots Available"
-                value={employerTasks.reduce((sum, t) => sum + t.slots_remaining, 0)}
+                value={employerTasks.reduce((sum, t) => sum + (t.slotsRemaining ?? t.slots_remaining ?? 0), 0)}
                 icon={<CheckCircle className="w-8 h-8" />}
               />
             </div>

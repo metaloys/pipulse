@@ -6,7 +6,7 @@ import { AdminSidebar } from '@/components/admin-sidebar';
 import { AdminStatsBar } from '@/components/admin-stats-bar';
 import { Card } from '@/components/ui/card';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Lock, Input } from 'lucide-react';
+import { Lock, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input as InputComponent } from '@/components/ui/input';
 

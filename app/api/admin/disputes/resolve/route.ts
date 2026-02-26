@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient();
 
     const { error } = await supabase
-      .from('disputes')
+      .from('Dispute')
       .update({
         status: 'resolved',
         admin_decision: decision,

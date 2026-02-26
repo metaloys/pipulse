@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
     if (taskId) {
       console.log(`\n👔 Fetching employer ID for task: ${taskId}`);
       const { data: taskData, error: taskError } = await supabaseAdmin
-        .from('tasks')
+        .from('Task')
         .select('employer_id')
         .eq('id', taskId)
         .maybeSingle();
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
     if (submissionId) {
       console.log(`\n🔒 [PRICE PROTECTION] Fetching agreed_reward from submission: ${submissionId}`);
       const { data: submissionData, error: submissionError } = await supabaseAdmin
-        .from('task_submissions')
+        .from('Submission')
         .select('agreed_reward')
         .eq('id', submissionId)
         .maybeSingle();
@@ -254,11 +254,11 @@ export async function POST(request: NextRequest) {
           const newTasksCompleted = (userData.total_tasks_completed || 0) + 1;
 
           const { data: updatedUser, error: updateError } = await supabaseAdmin
-            .from('users')
+            .from('User')
             .update({
               total_earnings: newTotalEarnings,
               total_tasks_completed: newTasksCompleted,
-              updated_at: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
             })
             .eq('id', workerId)
             .select()
@@ -283,11 +283,11 @@ export async function POST(request: NextRequest) {
         console.log(`\n✓ [STEP 4] Preparing submission status update: ${submissionId}`);
         const submissionUpdatePromise = (async () => {
           const { error: submissionError } = await supabaseAdmin
-            .from('task_submissions')
+            .from('Submission')
             .update({
               submission_status: 'approved',
               reviewed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
             })
             .eq('id', submissionId);
 
@@ -311,7 +311,7 @@ export async function POST(request: NextRequest) {
 
         const transactionPromise = (async () => {
           const { error: txError } = await supabaseAdmin
-            .from('transactions')
+            .from('Transaction')
             .insert([{
               task_id: taskId,
               sender_id: employerId, // FIXED: Use employer's UUID from users table
@@ -323,7 +323,7 @@ export async function POST(request: NextRequest) {
               transaction_status: 'completed',
               timestamp: new Date().toISOString(),
               created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
             }]);
 
           if (txError) {
@@ -356,7 +356,7 @@ export async function POST(request: NextRequest) {
           console.log(`\n🎯 [STEP 6] Preparing task slots update for: ${taskId}`);
 
           const { data: taskData } = await supabaseAdmin
-            .from('tasks')
+            .from('Task')
             .select('slots_remaining, task_status')
             .eq('id', taskId)
             .maybeSingle();
@@ -376,11 +376,11 @@ export async function POST(request: NextRequest) {
           const newTaskStatus = newSlotsRemaining === 0 ? 'completed' : taskData.task_status;
 
           const { error: updateSlotsError } = await supabaseAdmin
-            .from('tasks')
+            .from('Task')
             .update({
               slots_remaining: newSlotsRemaining,
               task_status: newTaskStatus,
-              updated_at: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
             })
             .eq('id', taskId);
 
@@ -429,16 +429,19 @@ export async function POST(request: NextRequest) {
           console.log(`   Recovery entry:`, recoveryEntry);
 
           // Try to log to recovery table (but don't fail if it doesn't exist yet)
-          const { error: recoveryError } = await supabaseAdmin
-            .from('failed_completions')
-            .insert([recoveryEntry])
-            .catch(() => ({ error: null }));
+          try {
+            const { error: recoveryError } = await supabaseAdmin
+              .from('FailedCompletion')
+              .insert([recoveryEntry]);
 
-          if (recoveryError) {
-            console.warn(`⚠️ Could not log to failed_completions table (table may not exist yet):`, recoveryError);
-            console.log(`   Manual recovery needed - save this data: `, recoveryEntry);
-          } else {
-            console.log(`✅ Recovery entry logged for manual inspection`);
+            if (recoveryError) {
+              console.warn(`⚠️ Could not log to failed_completions table (table may not exist yet):`, recoveryError);
+              console.log(`   Manual recovery needed - save this data: `, recoveryEntry);
+            } else {
+              console.log(`✅ Recovery entry logged for manual inspection`);
+            }
+          } catch (recoveryLogError) {
+            console.warn(`⚠️ Could not log to failed_completions table:`, recoveryLogError);
           }
 
           // IMPORTANT: Still return success to Pi SDK - payment already completed on blockchain

@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch transactions
     const { data: transactions, error } = await supabase
-      .from('transactions')
+      .from('Transaction')
       .select(`
         id,
         sender_id,
