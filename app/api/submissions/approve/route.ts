@@ -69,15 +69,15 @@ export async function POST(request: NextRequest) {
     const { error: transactionError } = await supabase
       .from('Transaction')
       .insert({
-        sender_id: employerId,
-        receiver_id: workerId,
+        senderId: employerId,
+        receiverId: workerId,
         amount: workerPay,
-        pipulse_fee: pipulseFee,
-        task_id: taskId,
-        submission_id: submissionId,
-        transaction_type: 'payment',
-        transaction_status: 'completed',
-        pi_blockchain_txid: null,
+        pipulseFee: pipulseFee,
+        taskId: taskId,
+        submissionId: submissionId,
+        type: 'PAYMENT',
+        status: 'COMPLETED',
+        piBlockchainTxId: null,
         timestamp: now,
       });
 
