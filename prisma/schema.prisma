@@ -84,8 +84,8 @@ model Task {
   employerId      String
   employer        User            @relation(fields: [employerId], references: [id], onDelete: Cascade)
   parentTaskId    String?         // Tracks if this is a repost of another task
-  parentTask      Task?           @relation("taskRepostHistory", fields: [parentTaskId], references: [id], onDelete: SetNull)
-  childTasks      Task[]          @relation("taskRepostHistory")
+  parentTask      Task?           @relation("repostLineage", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  reposts         Task[]          @relation("repostLineage")
   views           Int             @default(0)
   isFeatured      Boolean         @default(false)
   featuredUntil   DateTime?
