@@ -191,6 +191,7 @@ export async function getAllTasks() {
       )
     `)
     .eq('taskStatus', 'available')
+    .is('deletedAt', null)  // Exclude soft-deleted tasks
     .gt('slotsRemaining', 0)  // Only show tasks with available slots
     .order('createdAt', { ascending: false });
 
@@ -213,6 +214,7 @@ export async function getTasksByCategory(category: string) {
     `)
     .eq('category', category)
     .eq('taskStatus', 'available')
+    .is('deletedAt', null)  // Exclude soft-deleted tasks
     .gt('slotsRemaining', 0)  // Only show tasks with available slots
     .order('createdAt', { ascending: false });
 
@@ -295,14 +297,19 @@ export async function updateTask(taskId: string, updates: Partial<DatabaseTask>)
 }
 
 export async function deleteTask(taskId: string) {
+  const now = new Date().toISOString();
   const { error } = await supabase
     .from('Task')
-    .delete()
+    .update({
+      deletedAt: now,
+      taskStatus: 'completed',
+      updatedAt: now,
+    })
     .eq('id', taskId);
 
   if (error) {
     console.error('Error deleting task:', error);
-    return false; // Return false on error instead of throwing
+    return false;
   }
   return true;
 }
@@ -318,6 +325,7 @@ export async function getTasksByEmployer(employerId: string) {
       )
     `)
     .eq('employerId', employerId)
+    .is('deletedAt', null)  // Exclude soft-deleted tasks from active dashboard
     .order('createdAt', { ascending: false });
 
   if (error) {
