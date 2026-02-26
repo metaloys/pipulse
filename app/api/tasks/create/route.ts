@@ -18,7 +18,6 @@ export async function POST(request: Request) {
       slotsAvailable,
       deadline,
       employerId,
-      paymentId,
     } = body;
 
     // Validate required fields
@@ -65,7 +64,6 @@ export async function POST(request: Request) {
           taskStatus: 'available',
           instructions: body.instructions || `Complete this ${category} task. Proof type: ${proofType}`,
           proofType: proofType,
-          paymentId: paymentId || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
