@@ -96,7 +96,7 @@ export default function HomePage() {
         // (a user shouldn't accept their own tasks)
         let availableTasks = tasksData;
         if (userRole === 'worker' && userData?.id) {
-          availableTasks = tasksData.filter(task => task.employer_id !== userData.id);
+          availableTasks = tasksData.filter(task => task.employerId !== userData.id);
           console.log(`📋 Filtered tasks: ${tasksData.length} total, ${availableTasks.length} available for worker (excluded ${tasksData.length - availableTasks.length} own tasks)`);
         }
         
@@ -228,13 +228,21 @@ export default function HomePage() {
         }
 
         const paymentOptions = {
+<<<<<<< HEAD
           amount: parseFloat(currentTask.piReward.toString()),
+=======
+          amount: parseFloat((currentTask.piReward ?? currentTask.pi_reward ?? 0).toString()),
+>>>>>>> 72bd3dc77a22b5773c362196c8315a636ed5064d
           memo: `PiPulse Task: ${currentTask.title}`,
           metadata: {
             taskId: taskId,
             workerId: workerId,
             taskTitle: currentTask.title,
+<<<<<<< HEAD
             taskReward: currentTask.piReward,
+=======
+            taskReward: currentTask.piReward ?? currentTask.pi_reward ?? 0,
+>>>>>>> 72bd3dc77a22b5773c362196c8315a636ed5064d
             submissionType: submissionType,
           },
           onComplete: (metadata: any) => {
@@ -275,7 +283,7 @@ export default function HomePage() {
         revision_requested_at: null,
         resubmitted_at: null,
         employer_notes: null,
-        agreed_reward: currentTask.piReward ?? currentTask.pi_reward ?? 0,
+        agreed_reward: currentTask.piReward ?? currentTask.pi_reward ?? 0, // Store the price worker agreed to
         submitted_at: new Date().toISOString(),
         reviewed_at: null,
       });
@@ -288,7 +296,11 @@ export default function HomePage() {
       
       // STEP 4: Decrement the slotsRemaining for this task
       console.log(`📉 [STEP 5] Decrementing task slots...`);
+<<<<<<< HEAD
       const newSlotsRemaining = Math.max(0, currentTask.slotsRemaining - 1);
+=======
+      const newSlotsRemaining = Math.max(0, (currentTask.slotsRemaining ?? currentTask.slots_remaining ?? 0) - 1);
+>>>>>>> 72bd3dc77a22b5773c362196c8315a636ed5064d
       await updateTask(taskId, {
         slotsRemaining: newSlotsRemaining,
       });
@@ -298,7 +310,7 @@ export default function HomePage() {
       console.log(`🔄 [STEP 6] Refreshing task list...`);
       const updatedTasks = await getAllTasks();
       const availableTasks = userRole === 'worker' && userData?.id 
-        ? updatedTasks.filter(t => t.employer_id !== userData.id)
+        ? updatedTasks.filter(t => t.employerId !== userData.id)
         : updatedTasks;
       setTasks(availableTasks);
       console.log(`✅ [STEP 6] Task acceptance complete!`);
@@ -466,12 +478,12 @@ export default function HomePage() {
               />
               <StatsCard
                 label="Total Reward"
-                value={`${employerTasks.reduce((sum, t) => sum + t.pi_reward, 0)} π`}
+                value={`${employerTasks.reduce((sum, t) => sum + (t.piReward ?? t.pi_reward ?? 0), 0)} π`}
                 icon={<Coins className="w-8 h-8" />}
               />
               <StatsCard
                 label="Slots Available"
-                value={employerTasks.reduce((sum, t) => sum + t.slots_remaining, 0)}
+                value={employerTasks.reduce((sum, t) => sum + (t.slotsRemaining ?? t.slots_remaining ?? 0), 0)}
                 icon={<CheckCircle className="w-8 h-8" />}
               />
             </div>
