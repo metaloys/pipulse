@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import type { DatabaseTaskSubmission, DatabaseTask } from '@/lib/types';
-import { User, CheckCircle2, XCircle } from 'lucide-react';
+import { User, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 
 interface SubmissionReviewModalProps {
   isOpen: boolean;
@@ -125,19 +125,19 @@ export function SubmissionReviewModal({
           {/* Submission Type & Status */}
           <div className="flex gap-3">
             <Badge variant="secondary" className="text-sm">
-              {submissionTypeLabels[submission.submission_type]}
+              {submissionTypeLabels[submission.submissionType?.toLowerCase()] || submissionTypeLabels[submission.submissionType]}
             </Badge>
             <Badge
               variant="outline"
               className={`text-sm ${
-                submission.submission_status === 'approved'
+                submission.status === 'APPROVED'
                   ? 'bg-green-500/10 border-green-500/50 text-green-400'
-                  : submission.submission_status === 'rejected'
+                  : submission.status === 'REJECTED'
                   ? 'bg-red-500/10 border-red-500/50 text-red-400'
                   : 'border-white/10'
               }`}
             >
-              {submission.submission_status.charAt(0).toUpperCase() + submission.submission_status.slice(1)}
+              {submission.status}
             </Badge>
           </div>
 
@@ -146,18 +146,18 @@ export function SubmissionReviewModal({
             <Label className="text-base font-semibold">Worker's Proof</Label>
             <div className="glassmorphism p-4 border-white/10 rounded-lg bg-muted/30 max-h-48 overflow-y-auto">
               <p className="text-sm text-foreground whitespace-pre-wrap">
-                {submission.proof_content}
+                {submission.proofContent}
               </p>
             </div>
           </div>
 
           {/* Rejection Reason (if rejected) */}
-          {submission.submission_status === 'rejected' && submission.rejection_reason && (
+          {submission.status === 'REJECTED' && submission.rejectionReason && (
             <div className="space-y-3">
               <Label className="text-base font-semibold text-red-400">Rejection Reason</Label>
               <div className="glassmorphism p-4 border-red-500/50 rounded-lg bg-red-500/10 max-h-32 overflow-y-auto">
                 <p className="text-sm text-red-300 whitespace-pre-wrap">
-                  {submission.rejection_reason}
+                  {submission.rejectionReason}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
