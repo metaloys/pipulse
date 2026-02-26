@@ -329,7 +329,7 @@ export async function submitTask(data: any) {
     taskId: data.task_id || data.taskId,
     workerId: data.worker_id || data.workerId,
     proofContent: data.proof_content || data.proofContent,
-    submissionType: data.submission_type || data.submissionType,
+    submissionType: (data.submission_type || data.submissionType)?.toUpperCase(),
     status: 'SUBMITTED', // Always start with SUBMITTED status
     agreedReward: data.agreed_reward || data.agreedReward,
     rejectionReason: data.rejection_reason || null,
