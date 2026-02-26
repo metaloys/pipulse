@@ -201,7 +201,7 @@ export default function HomePage() {
       }
       
       // STEP 2: Trigger Pi Payment BEFORE creating submission
-      console.log(`💳 [STEP 1] Initiating Pi payment for task reward: ${currentTask.pi_reward}π`);
+      console.log(`💳 [STEP 1] Initiating Pi payment for task reward: ${currentTask.piReward}π`);
       
       // Create a promise that resolves when payment is approved
       const paymentApproved = new Promise<void>((resolve, reject) => {
@@ -212,19 +212,19 @@ export default function HomePage() {
         }
 
         const paymentOptions = {
-          amount: parseFloat(currentTask.pi_reward.toString()),
+          amount: parseFloat((currentTask.piReward ?? currentTask.pi_reward ?? 0).toString()),
           memo: `PiPulse Task: ${currentTask.title}`,
           metadata: {
             taskId: taskId,
             workerId: workerId,
             taskTitle: currentTask.title,
-            taskReward: currentTask.pi_reward,
+            taskReward: currentTask.piReward ?? currentTask.pi_reward ?? 0,
             submissionType: submissionType,
           },
           onComplete: (metadata: any) => {
             console.log(`✅ [STEP 2] Pi payment approved:`, metadata);
             console.log(`   Task: ${currentTask.title}`);
-            console.log(`   Amount: ${currentTask.pi_reward}π`);
+            console.log(`   Amount: ${currentTask.piReward}π`);
             console.log(`   Worker: ${workerId}`);
             resolve();
           },
@@ -259,7 +259,7 @@ export default function HomePage() {
         revision_requested_at: null,
         resubmitted_at: null,
         employer_notes: null,
-        agreed_reward: currentTask.pi_reward, // Store the price worker agreed to
+        agreed_reward: currentTask.piReward ?? currentTask.pi_reward ?? 0, // Store the price worker agreed to
         submitted_at: new Date().toISOString(),
         reviewed_at: null,
 
@@ -273,9 +273,9 @@ export default function HomePage() {
       
       // STEP 4: Decrement the slots_remaining for this task
       console.log(`📉 [STEP 5] Decrementing task slots...`);
-      const newSlotsRemaining = Math.max(0, currentTask.slots_remaining - 1);
+      const newSlotsRemaining = Math.max(0, (currentTask.slotsRemaining ?? currentTask.slots_remaining ?? 0) - 1);
       await updateTask(taskId, {
-        slots_remaining: newSlotsRemaining,
+        slotsRemaining: newSlotsRemaining,
       });
       console.log(`✅ [STEP 5] Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
       
