@@ -51,6 +51,7 @@ export async function POST(request: Request) {
       .from('Task')
       .insert([
         {
+          id: crypto.randomUUID(),
           title: title.trim(),
           description: description.trim(),
           category: category.toLowerCase(),
