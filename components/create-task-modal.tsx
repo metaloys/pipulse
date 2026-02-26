@@ -193,8 +193,8 @@ export function CreateTaskModal({
       console.log('✅ [STEP 5] Task created successfully:', {
         id: result.task?.id,
         title: result.task?.title,
-        reward: result.task?.pi_reward,
-        slots: result.task?.slots_remaining,
+        reward: result.task?.piReward,
+        slots: result.task?.slotsAvailable,
       });
 
       console.log('🎉 [STEP 6] Task posting complete!');
