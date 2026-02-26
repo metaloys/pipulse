@@ -7,13 +7,13 @@ CREATE TABLE "User" (
     "level" TEXT NOT NULL DEFAULT 'NEWCOMER',
     "currentStreak" INTEGER NOT NULL DEFAULT 0,
     "longestStreak" INTEGER NOT NULL DEFAULT 0,
-    "lastActiveDate" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastActiveDate" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "totalEarnings" DECIMAL NOT NULL DEFAULT 0,
     "totalTasksCompleted" INTEGER NOT NULL DEFAULT 0,
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    "deletedAt" DATETIME
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
+    "deletedAt" TIMESTAMP
 );
 
 -- CreateTable
@@ -26,17 +26,17 @@ CREATE TABLE "Task" (
     "proofType" TEXT NOT NULL,
     "piReward" DECIMAL NOT NULL,
     "timeEstimate" INTEGER NOT NULL,
-    "deadline" DATETIME NOT NULL,
+    "deadline" TIMESTAMP NOT NULL,
     "slotsAvailable" INTEGER NOT NULL,
     "slotsRemaining" INTEGER NOT NULL,
     "taskStatus" TEXT NOT NULL DEFAULT 'AVAILABLE',
     "employerId" TEXT NOT NULL,
     "views" INTEGER NOT NULL DEFAULT 0,
     "isFeatured" BOOLEAN NOT NULL DEFAULT false,
-    "featuredUntil" DATETIME,
-    "deletedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "featuredUntil" TIMESTAMP,
+    "deletedAt" TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "Task_employerId_fkey" FOREIGN KEY ("employerId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -49,9 +49,9 @@ CREATE TABLE "TaskVersion" (
     "instructions" TEXT,
     "piReward" DECIMAL,
     "slotsAvailable" INTEGER,
-    "deadline" DATETIME,
+    "deadline" TIMESTAMP,
     "changedBy" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "TaskVersion_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -60,8 +60,8 @@ CREATE TABLE "SlotLock" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "taskId" TEXT NOT NULL,
     "workerId" TEXT NOT NULL,
-    "lockedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "expiresAt" DATETIME NOT NULL,
+    "lockedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP NOT NULL,
     CONSTRAINT "SlotLock_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -77,16 +77,16 @@ CREATE TABLE "Submission" (
     "rejectionReason" TEXT,
     "revisionNumber" INTEGER NOT NULL DEFAULT 0,
     "revisionReason" TEXT,
-    "revisionRequestedAt" DATETIME,
-    "resubmittedAt" DATETIME,
+    "revisionRequestedAt" TIMESTAMP,
+    "resubmittedAt" TIMESTAMP,
     "adminNotes" TEXT,
-    "acceptedAt" DATETIME,
-    "submittedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "reviewedAt" DATETIME,
+    "acceptedAt" TIMESTAMP,
+    "submittedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reviewedAt" TIMESTAMP,
     "autoApproved" BOOLEAN NOT NULL DEFAULT false,
-    "deletedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "deletedAt" TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "Submission_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "Submission_workerId_fkey" FOREIGN KEY ("workerId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -103,10 +103,10 @@ CREATE TABLE "Transaction" (
     "type" TEXT NOT NULL,
     "status" TEXT NOT NULL,
     "piBlockchainTxId" TEXT,
-    "failedAt" DATETIME,
-    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "failedAt" TIMESTAMP,
+    "timestamp" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "Transaction_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Transaction_receiverId_fkey" FOREIGN KEY ("receiverId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Transaction_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
@@ -121,11 +121,11 @@ CREATE TABLE "FailedCompletion" (
     "amount" DECIMAL NOT NULL,
     "error" TEXT NOT NULL,
     "attempts" INTEGER NOT NULL DEFAULT 1,
-    "nextRetry" DATETIME,
-    "resolvedAt" DATETIME,
+    "nextRetry" TIMESTAMP,
+    "resolvedAt" TIMESTAMP,
     "resolution" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL
 );
 
 -- CreateTable
@@ -139,9 +139,9 @@ CREATE TABLE "Dispute" (
     "status" TEXT NOT NULL DEFAULT 'PENDING',
     "ruling" TEXT,
     "adminNotes" TEXT,
-    "resolvedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "resolvedAt" TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "Dispute_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "Submission" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "Dispute_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "Dispute_workerId_fkey" FOREIGN KEY ("workerId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -156,8 +156,8 @@ CREATE TABLE "Notification" (
     "actionUrl" TEXT,
     "type" TEXT NOT NULL,
     "read" BOOLEAN NOT NULL DEFAULT false,
-    "deletedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "deletedAt" TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -169,7 +169,7 @@ CREATE TABLE "AuditLog" (
     "targetType" TEXT,
     "details" JSONB,
     "ipAddress" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AuditLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
@@ -184,8 +184,8 @@ CREATE TABLE "PlatformSettings" (
     "slotLockMinutes" INTEGER NOT NULL DEFAULT 120,
     "autoApprovalHours" INTEGER NOT NULL DEFAULT 48,
     "maxRevisionAttempts" INTEGER NOT NULL DEFAULT 1,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL
 );
 
 -- CreateTable
@@ -194,10 +194,10 @@ CREATE TABLE "Streak" (
     "userId" TEXT NOT NULL,
     "currentStreak" INTEGER NOT NULL DEFAULT 0,
     "longestStreak" INTEGER NOT NULL DEFAULT 0,
-    "lastActiveDate" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastActiveDate" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "streakBonusEarned" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     CONSTRAINT "Streak_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
