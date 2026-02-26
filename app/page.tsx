@@ -96,7 +96,7 @@ export default function HomePage() {
         // (a user shouldn't accept their own tasks)
         let availableTasks = tasksData;
         if (userRole === 'worker' && userData?.id) {
-          availableTasks = tasksData.filter(task => task.employer_id !== userData.id);
+          availableTasks = tasksData.filter(task => task.employerId !== userData.id);
           console.log(`📋 Filtered tasks: ${tasksData.length} total, ${availableTasks.length} available for worker (excluded ${tasksData.length - availableTasks.length} own tasks)`);
         }
         
@@ -283,7 +283,7 @@ export default function HomePage() {
       console.log(`🔄 [STEP 6] Refreshing task list...`);
       const updatedTasks = await getAllTasks();
       const availableTasks = userRole === 'worker' && userData?.id 
-        ? updatedTasks.filter(t => t.employer_id !== userData.id)
+        ? updatedTasks.filter(t => t.employerId !== userData.id)
         : updatedTasks;
       setTasks(availableTasks);
       console.log(`✅ [STEP 6] Task acceptance complete!`);
@@ -451,12 +451,12 @@ export default function HomePage() {
               />
               <StatsCard
                 label="Total Reward"
-                value={`${employerTasks.reduce((sum, t) => sum + t.pi_reward, 0)} π`}
+                value={`${employerTasks.reduce((sum, t) => sum + (t.piReward ?? t.pi_reward ?? 0), 0)} π`}
                 icon={<Coins className="w-8 h-8" />}
               />
               <StatsCard
                 label="Slots Available"
-                value={employerTasks.reduce((sum, t) => sum + t.slots_remaining, 0)}
+                value={employerTasks.reduce((sum, t) => sum + (t.slotsRemaining ?? t.slots_remaining ?? 0), 0)}
                 icon={<CheckCircle className="w-8 h-8" />}
               />
             </div>
