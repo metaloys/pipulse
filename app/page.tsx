@@ -216,60 +216,11 @@ export default function HomePage() {
 
       console.log('🔍 Task object:', JSON.stringify(currentTask));
       
-      // STEP 2: Trigger Pi Payment BEFORE creating submission
-      console.log(`💳 [STEP 1] Initiating Pi payment for task reward: ${currentTask.piReward}π`);
+      // STEP 2: Submit proof without payment (escrow model)
+      // Worker submits proof → employer approves → system releases funds from escrow
+      console.log('✅ [STEP 2] Proof submitted, awaiting employer review');
       
-      // Create a promise that resolves when payment is approved
-      const paymentApproved = new Promise<void>((resolve, reject) => {
-        if (!window.pay) {
-          console.warn('⚠️ Pi payment not available, skipping payment step');
-          resolve();
-          return;
-        }
-
-        const paymentOptions = {
-<<<<<<< HEAD
-          amount: parseFloat(currentTask.piReward.toString()),
-=======
-          amount: parseFloat((currentTask.piReward ?? currentTask.pi_reward ?? 0).toString()),
->>>>>>> 72bd3dc77a22b5773c362196c8315a636ed5064d
-          memo: `PiPulse Task: ${currentTask.title}`,
-          metadata: {
-            taskId: taskId,
-            workerId: workerId,
-            taskTitle: currentTask.title,
-<<<<<<< HEAD
-            taskReward: currentTask.piReward,
-=======
-            taskReward: currentTask.piReward ?? currentTask.pi_reward ?? 0,
->>>>>>> 72bd3dc77a22b5773c362196c8315a636ed5064d
-            submissionType: submissionType,
-          },
-          onComplete: (metadata: any) => {
-            console.log(`✅ [STEP 2] Pi payment approved:`, metadata);
-            console.log(`   Task: ${currentTask.title}`);
-            console.log(`   Amount: ${currentTask.piReward}π`);
-            console.log(`   Worker: ${workerId}`);
-            resolve();
-          },
-          onError: (error: Error) => {
-            console.error(`❌ [STEP 2] Pi payment failed:`, error);
-            reject(error);
-          },
-        };
-
-        try {
-          window.pay?.(paymentOptions);
-        } catch (err) {
-          console.error('❌ Failed to initiate payment:', err);
-          reject(err);
-        }
-      });
-
-      // Wait for payment before proceeding
-      await paymentApproved;
-      
-      // STEP 3: Create the submission record AFTER payment approved
+      // STEP 3: Create the submission record
       console.log(`✅ [STEP 3] Payment confirmed. Creating submission record...`);
       const submission = await submitTask({
         task_id: taskId,
@@ -296,11 +247,7 @@ export default function HomePage() {
       
       // STEP 4: Decrement the slotsRemaining for this task
       console.log(`📉 [STEP 5] Decrementing task slots...`);
-<<<<<<< HEAD
       const newSlotsRemaining = Math.max(0, currentTask.slotsRemaining - 1);
-=======
-      const newSlotsRemaining = Math.max(0, (currentTask.slotsRemaining ?? currentTask.slots_remaining ?? 0) - 1);
->>>>>>> 72bd3dc77a22b5773c362196c8315a636ed5064d
       await updateTask(taskId, {
         slotsRemaining: newSlotsRemaining,
       });
