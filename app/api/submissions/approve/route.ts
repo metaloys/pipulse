@@ -14,11 +14,11 @@ function getSupabaseClient() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { submissionId, taskId, workerId, piReward } = await request.json();
+    const { submissionId, workerId, agreedReward } = await request.json();
 
-    if (!submissionId || !taskId || !workerId || piReward === undefined) {
+    if (!submissionId || !workerId || agreedReward === undefined) {
       return NextResponse.json(
-        { error: 'Missing required fields: submissionId, taskId, workerId, piReward' },
+        { error: 'Missing required fields: submissionId, workerId, agreedReward' },
         { status: 400 }
       );
     }
@@ -26,106 +26,130 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient();
     const now = new Date().toISOString();
 
-    // 1. Get the current task to get employer ID and current slots
-    const { data: taskData, error: taskError } = await supabase
-      .from('Task')
-      .select('id, employerId, slotsRemaining')
-      .eq('id', taskId)
+    // 1. Get submission and verify it exists and is SUBMITTED
+    const { data: submissionData, error: submissionError } = await supabase
+      .from('Submission')
+      .select('*')
+      .eq('id', submissionId)
       .single();
 
-    if (taskError || !taskData) {
+    if (submissionError || !submissionData || submissionData.status !== 'SUBMITTED') {
       return NextResponse.json(
-        { error: 'Task not found' },
+        { error: 'Invalid submission or already processed' },
+        { status: 400 }
+      );
+    }
+
+    // 2. Get worker to verify they exist
+    const { data: workerData, error: workerError } = await supabase
+      .from('User')
+      .select('id, piUsername, totalEarnings, totalTasksCompleted')
+      .eq('id', workerId)
+      .single();
+
+    if (workerError || !workerData) {
+      return NextResponse.json(
+        { error: 'Worker not found' },
         { status: 404 }
       );
     }
 
-    const employerId = taskData.employerId;
+    // 3. Calculate fee and payout (5% platform fee)
+    const platformFee = parseFloat((agreedReward * 0.05).toFixed(4));
+    const workerPayout = parseFloat((agreedReward - platformFee).toFixed(4));
 
-    // 2. Update submission status to APPROVED
-    const { data: submissionData, error: submissionError } = await supabase
+    console.log(`💰 Releasing payment: ${agreedReward}π total, ${workerPayout}π to worker, ${platformFee}π fee`);
+
+    // 4. Call Pi API to send real Pi to worker
+    let piResponse = null;
+    let piData = null;
+    let piPaymentSuccessful = false;
+
+    try {
+      piResponse = await fetch('https://api.minepi.com/v2/payments', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${process.env.PI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: workerPayout,
+          memo: 'PiPulse: Task payment',
+          metadata: {
+            submissionId: submissionId,
+            workerId: workerId,
+            type: 'worker_payout',
+          },
+          uid: workerId,
+          payment_type: 'developer_to_user',
+        }),
+      });
+
+      piData = await piResponse.json();
+      piPaymentSuccessful = piResponse.ok;
+      console.log('Pi API response:', piData);
+
+      if (!piResponse.ok) {
+        console.error('Pi API error:', piData);
+      }
+    } catch (piError) {
+      console.error('Pi API call failed:', piError);
+      // Continue with database update even if Pi API fails
+      // so we can retry payment manually later
+    }
+
+    // 5. Update submission to APPROVED
+    await supabase
       .from('Submission')
       .update({
         status: 'APPROVED',
         reviewedAt: now,
         updatedAt: now,
       })
-      .eq('id', submissionId)
-      .select()
-      .single();
+      .eq('id', submissionId);
 
-    if (submissionError || !submissionData) {
-      return NextResponse.json(
-        { error: 'Failed to approve submission' },
-        { status: 500 }
-      );
-    }
+    // 6. Update worker earnings and task count in User table
+    const newTotalEarnings = (workerData.totalEarnings || 0) + workerPayout;
+    const newTasksCompleted = (workerData.totalTasksCompleted || 0) + 1;
 
-    // 3. Calculate payment (15% platform fee)
-    const pipulseFee = piReward * 0.15;
-    const workerPay = piReward - pipulseFee;
+    await supabase
+      .from('User')
+      .update({
+        totalEarnings: newTotalEarnings,
+        totalTasksCompleted: newTasksCompleted,
+        updatedAt: now,
+      })
+      .eq('id', workerId);
 
-    // 4. Create transaction record
-    const { error: transactionError } = await supabase
+    // 7. Create Transaction record with Pi payment details
+    await supabase
       .from('Transaction')
       .insert({
-        senderId: employerId,
+        senderId: 'pipulse_escrow',
         receiverId: workerId,
-        amount: workerPay,
-        pipulseFee: pipulseFee,
-        taskId: taskId,
+        amount: workerPayout,
+        pipulseFee: platformFee,
         submissionId: submissionId,
         type: 'PAYMENT',
-        status: 'COMPLETED',
-        piBlockchainTxId: null,
+        status: piPaymentSuccessful ? 'COMPLETED' : 'PENDING',
+        piBlockchainTxId: piData?.transaction?.txid || null,
         timestamp: now,
       });
 
-    if (transactionError) {
-      console.error('Transaction error:', transactionError);
-      // Don't fail the whole request if transaction fails, log it
-    }
-
-    // 5. Update worker total earnings
-    const { data: workerData } = await supabase
-      .from('User')
-      .select('totalEarnings, totalTasksCompleted')
-      .eq('id', workerId)
-      .single();
-
-    if (workerData) {
-      const newTotalEarnings = (workerData.totalEarnings || 0) + workerPay;
-      const newTasksCompleted = (workerData.totalTasksCompleted || 0) + 1;
-
-      await supabase
-        .from('User')
-        .update({
-          totalEarnings: newTotalEarnings,
-          totalTasksCompleted: newTasksCompleted,
-          updatedAt: now,
-        })
-        .eq('id', workerId);
-    }
-
-    // 6. Update task slots remaining
-    const newSlotsRemaining = Math.max(0, taskData.slotsRemaining - 1);
-    await supabase
-      .from('Task')
-      .update({
-        slotsRemaining: newSlotsRemaining,
-        updatedAt: now,
-      })
-      .eq('id', taskId);
+    console.log(
+      `✅ Payment released: ${workerPayout}π to worker ${workerData.piUsername}`,
+      piPaymentSuccessful ? '(Pi blockchain confirmed)' : '(pending Pi API confirmation)'
+    );
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Submission approved successfully',
-        submission: submissionData,
-        transaction: {
-          amount: workerPay,
-          fee: pipulseFee,
-        },
+        workerPayout,
+        platformFee,
+        piPaymentId: piData?.identifier,
+        piBlockchainTxId: piData?.transaction?.txid,
+        newTotalEarnings,
+        newTasksCompleted,
       },
       { status: 200 }
     );
