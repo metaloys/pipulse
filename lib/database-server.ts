@@ -97,7 +97,7 @@ export async function serverUpdateUser(
     const supabase = getServerSupabase();
     const { data, error } = await supabase
       .from('User')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update({ ...updates, updatedAt: new Date().toISOString() })
       .eq('id', userId)
       .select()
       .maybeSingle();
@@ -292,7 +292,7 @@ export async function serverUpdateTask(
     const supabase = getServerSupabase();
     const { data, error } = await supabase
       .from('Task')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update({ ...updates, updatedAt: new Date().toISOString() })
       .eq('id', taskId)
       .select()
       .maybeSingle();
@@ -380,7 +380,7 @@ export async function serverUpdateSubmission(
     const supabase = getServerSupabase();
     const { data, error } = await supabase
       .from('Submission')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update({ ...updates, updatedAt: new Date().toISOString() })
       .eq('id', submissionId)
       .select()
       .maybeSingle();
@@ -493,7 +493,7 @@ export async function serverUpdateTransactionStatus(
       .from('Transaction')
       .update({
         transaction_status: status,
-        updated_at: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
       .eq('id', transactionId)
       .select()
@@ -569,7 +569,7 @@ export async function serverResolveDispute(
         admin_notes: adminNotes,
         admin_id: adminId,
         resolved_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
       .eq('id', disputeId)
       .select()
@@ -876,7 +876,7 @@ export async function serverFixNegativeSlots() {
       .update({
         slots_remaining: 0,
         task_status: 'completed',
-        updated_at: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
       .lt('slots_remaining', 0);
 
@@ -930,7 +930,7 @@ export async function serverDecrementTaskSlots(taskId: string) {
       .update({
         slots_remaining: newSlotsRemaining,
         task_status: newTaskStatus,
-        updated_at: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
       .eq('id', taskId);
 
@@ -1045,7 +1045,7 @@ export async function serverUpdatePlatformSetting(
       .from('PlatformSettings')
       .update({
         value,
-        updated_at: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
       .eq('key', key);
 
@@ -1057,7 +1057,7 @@ export async function serverUpdatePlatformSetting(
           {
             key,
             value,
-            updated_at: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           },
         ]);
 

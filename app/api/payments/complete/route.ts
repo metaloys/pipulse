@@ -258,7 +258,7 @@ export async function POST(request: NextRequest) {
             .update({
               total_earnings: newTotalEarnings,
               total_tasks_completed: newTasksCompleted,
-              updated_at: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
             })
             .eq('id', workerId)
             .select()
@@ -287,7 +287,7 @@ export async function POST(request: NextRequest) {
             .update({
               submission_status: 'approved',
               reviewed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
             })
             .eq('id', submissionId);
 
@@ -323,7 +323,7 @@ export async function POST(request: NextRequest) {
               transaction_status: 'completed',
               timestamp: new Date().toISOString(),
               created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
             }]);
 
           if (txError) {
@@ -380,7 +380,7 @@ export async function POST(request: NextRequest) {
             .update({
               slots_remaining: newSlotsRemaining,
               task_status: newTaskStatus,
-              updated_at: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
             })
             .eq('id', taskId);
 

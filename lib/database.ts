@@ -136,7 +136,7 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
 export async function updateUser(userId: string, updates: Partial<DatabaseUser>) {
   const { data, error } = await supabase
     .from('User')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({ ...updates, updatedAt: new Date().toISOString() })
     .eq('id', userId)
     .select()
     .maybeSingle();
@@ -240,44 +240,44 @@ export async function createTask(task: Omit<DatabaseTask, 'id' | 'created_at' | 
 }
 
 export async function updateTask(taskId: string, updates: Partial<DatabaseTask>) {
-  // If slots_available is being changed, we need to recalculate slots_remaining
-  let updatesToApply = { ...updates, updated_at: new Date().toISOString() };
+  // If slotsAvailable is being changed, we need to recalculate slotsRemaining
+  let updatesToApply = { ...updates, updatedAt: new Date().toISOString() };
   
-  // If slots_available is being updated, recalculate slots_remaining
-  if (updates.slots_available !== undefined) {
+  // If slotsAvailable is being updated, recalculate slotsRemaining
+  if (updates.slotsAvailable !== undefined) {
     // Get current task to calculate the difference
     const currentTask = await getTaskById(taskId);
     if (currentTask) {
-      const oldSlotsAvailable = currentTask.slots_available;
-      const newSlotsAvailable = updates.slots_available;
+      const oldSlotsAvailable = currentTask.slotsAvailable;
+      const newSlotsAvailable = updates.slotsAvailable;
       const difference = newSlotsAvailable - oldSlotsAvailable;
       
-      // Add the difference to slots_remaining (positive increase or negative decrease)
-      const newSlotsRemaining = Math.max(0, currentTask.slots_remaining + difference);
-      updatesToApply.slots_remaining = newSlotsRemaining;
+      // Add the difference to slotsRemaining (positive increase or negative decrease)
+      const newSlotsRemaining = Math.max(0, currentTask.slotsRemaining + difference);
+      updatesToApply.slotsRemaining = newSlotsRemaining;
       
       console.log(`♻️ Slots recalculation: available ${oldSlotsAvailable} → ${newSlotsAvailable}, remaining adjusted to ${newSlotsRemaining}`);
     }
   }
   
-  // Auto-evaluate task_status based on current state
+  // Auto-evaluate taskStatus based on current state
   // Task is available if: has remaining slots AND deadline not expired
   const now = new Date();
-  if (updatesToApply.deadline || updates.slots_remaining !== undefined) {
+  if (updatesToApply.deadline || updates.slotsRemaining !== undefined) {
     const currentTask = await getTaskById(taskId);
     const deadline = updatesToApply.deadline ? new Date(updatesToApply.deadline) : 
                      (currentTask?.deadline ? new Date(currentTask.deadline) : null);
-    const slotsRemaining = updatesToApply.slots_remaining !== undefined ? 
-                          updatesToApply.slots_remaining : 
-                          currentTask?.slots_remaining;
+    const slotsRemaining = updatesToApply.slotsRemaining !== undefined ? 
+                          updatesToApply.slotsRemaining : 
+                          currentTask?.slotsRemaining;
     
     const hasAvailableSlots = slotsRemaining && slotsRemaining > 0;
     const deadlineNotExpired = deadline && deadline > now;
     
-    // Auto-set task_status: available if has slots AND not expired, completed otherwise
-    updatesToApply.task_status = (hasAvailableSlots && deadlineNotExpired) ? 'available' : 'completed';
+    // Auto-set taskStatus: available if has slots AND not expired, completed otherwise
+    updatesToApply.taskStatus = (hasAvailableSlots && deadlineNotExpired) ? 'available' : 'completed';
     
-    console.log(`📊 Task status auto-evaluated: slots=${slotsRemaining}, deadline=${deadline?.toISOString()}, status=${updatesToApply.task_status}`);
+    console.log(`📊 Task status auto-evaluated: slots=${slotsRemaining}, deadline=${deadline?.toISOString()}, status=${updatesToApply.taskStatus}`);
   }
 
   const { data, error } = await supabase
