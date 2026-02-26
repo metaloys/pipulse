@@ -111,30 +111,21 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
     try {
       if (!selectedSubmission || !selectedTask) return;
 
-      // Approve the submission
-      await approveSubmission(submissionId);
-
-      // Create transaction to pay the worker (15% fee taken)
-      const piReward = selectedTask.piReward;
-      const pipulseFee = piReward * 0.15;
-      const workerPay = piReward - pipulseFee;
-
-      await createTransaction({
-        sender_id: employerId,
-        receiver_id: selectedSubmission.workerId,
-        amount: workerPay,
-        pipulse_fee: pipulseFee,
-        task_id: selectedTask.id,
-        transaction_type: 'payment',
-        transaction_status: 'completed',
-        pi_blockchain_txid: null,
-        timestamp: new Date().toISOString(),
+      // Call the approve endpoint which handles all the approval logic
+      const response = await fetch('/api/submissions/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissionId,
+          taskId: selectedTask.id,
+          workerId: selectedSubmission.workerId,
+          piReward: selectedTask.piReward,
+        }),
       });
 
-      // Update task slots
-      await updateTask(selectedTask.id, {
-        slotsRemaining: selectedTask.slotsRemaining - 1,
-      });
+      if (!response.ok) {
+        throw new Error('Failed to approve submission');
+      }
 
       // Reload submissions
       await loadSubmissions();
@@ -147,7 +138,21 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
 
   const handleRejectSubmission = async (submissionId: string, reason: string) => {
     try {
-      await rejectSubmission(submissionId, reason);
+      // Call the reject endpoint
+      const response = await fetch('/api/submissions/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissionId,
+          reason,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reject submission');
+      }
+
+      // Reload submissions
       await loadSubmissions();
       setIsReviewModalOpen(false);
     } catch (err) {

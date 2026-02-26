@@ -8,9 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import type { DatabaseTaskSubmission, DatabaseTask } from '@/lib/types';
-import { Clock, User, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
-import { releasePaymentToWorker, calculateWorkerPayment } from '@/lib/pi-payment-escrow';
-import { getUserById } from '@/lib/database';
+import { User, CheckCircle2, XCircle } from 'lucide-react';
 
 interface SubmissionReviewModalProps {
   isOpen: boolean;
@@ -43,28 +41,8 @@ export function SubmissionReviewModal({
       setIsApproving(true);
       setError(null);
 
-      // Get worker details for payment
-      const worker = await getUserById(submission.worker_id);
-      if (!worker) {
-        throw new Error('Worker not found');
-      }
-
-      // Trigger Pi payment from PiPulse owner to worker
-      try {
-        console.log('💰 Initiating payment to worker...');
-        await releasePaymentToWorker(
-          task.id,
-          submission.worker_id,
-          worker.pi_username,
-          task.pi_reward
-        );
-        console.log('✅ Payment to worker completed');
-      } catch (paymentError) {
-        console.error('⚠️ Payment initiation warning (may retry):', paymentError);
-        // Continue with approval even if payment UI shows - backend may retry
-      }
-
-      // Approve the submission in database
+      // Call onApprove which calls the API endpoint
+      // The endpoint handles: submission approval, worker payment, earnings update, slots update
       await onApprove(submission.id);
       onClose();
     } catch (err) {
@@ -121,7 +99,7 @@ export function SubmissionReviewModal({
                 <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-primary">{task.pi_reward} π</p>
+                <p className="text-2xl font-bold text-primary">{task.piReward} π</p>
                 <p className="text-xs text-muted-foreground">reward</p>
               </div>
             </div>
@@ -138,7 +116,7 @@ export function SubmissionReviewModal({
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">Submitted</p>
                 <p className="text-sm font-semibold">
-                  {new Date(submission.submitted_at).toLocaleDateString()} {new Date(submission.submitted_at).toLocaleTimeString()}
+                  {new Date(submission.submittedAt).toLocaleDateString()} {new Date(submission.submittedAt).toLocaleTimeString()}
                 </p>
               </div>
             </div>
@@ -200,22 +178,22 @@ export function SubmissionReviewModal({
           )}
 
           {/* Payment Breakdown (before approval) */}
-          {submission.submission_status === 'submitted' && (
+          {submission.status === 'SUBMITTED' && (
             <div className="glassmorphism p-4 rounded-lg bg-green-500/5 border border-green-500/20 space-y-3">
               <h4 className="font-semibold text-green-400">Payment Details</h4>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Task Reward:</span>
-                  <span className="font-semibold">{task.pi_reward} π</span>
+                  <span className="font-semibold">{task.piReward} π</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">PiPulse Fee (15%):</span>
-                  <span className="font-semibold text-orange-400">{(parseFloat(String((task.pi_reward || 0) * 0.15)) || 0).toFixed(2)} π</span>
+                  <span className="font-semibold text-orange-400">{(parseFloat(String((task.piReward || 0) * 0.15)) || 0).toFixed(2)} π</span>
                 </div>
                 <div className="h-px bg-white/10 my-2" />
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-semibold">Worker Receives:</span>
-                  <span className="font-bold text-green-400">{(parseFloat(String((task.pi_reward || 0) * 0.85)) || 0).toFixed(2)} π</span>
+                  <span className="font-bold text-green-400">{(parseFloat(String((task.piReward || 0) * 0.85)) || 0).toFixed(2)} π</span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-3">
@@ -225,7 +203,7 @@ export function SubmissionReviewModal({
           )}
 
           {/* Action Buttons */}
-          {submission.submission_status === 'submitted' ? (
+          {submission.status === 'SUBMITTED' ? (
             <>
               {!showRejectForm ? (
                 <div className="flex gap-3 pt-4 border-t border-white/10">
