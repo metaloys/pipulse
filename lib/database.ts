@@ -580,7 +580,7 @@ export async function getUserStats(userId: string) {
       .from('Transaction')
       .select('id, amount, pipulseFee, createdAt, status')
       .eq('receiverId', userId)
-      .eq('status', 'COMPLETED')
+      .eq('status', 'completed')
       .order('createdAt', { ascending: false });
 
     if (txError) {

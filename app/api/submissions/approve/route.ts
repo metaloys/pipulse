@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
         pipulseFee: platformFee,
         submissionId: submissionId,
         type: 'PAYMENT',
-        status: piPaymentSuccessful ? 'COMPLETED' : 'PENDING',
+        status: piPaymentSuccessful ? 'completed' : 'pending',
         piBlockchainTxId: piData?.transaction?.txid || null,
         timestamp: now,
       });
