@@ -196,6 +196,84 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const employerId = searchParams.get('employerId');
+
+    // Employer gets all submissions for their tasks
+    if (employerId) {
+      try {
+        // Import the database function to get submissions for employer
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        // Get all tasks for this employer
+        const { data: tasks, error: tasksError } = await supabase
+          .from('Task')
+          .select('id')
+          .eq('employerId', employerId);
+
+        if (tasksError) {
+          console.error('Error fetching employer tasks:', tasksError);
+          return NextResponse.json(
+            { error: 'Failed to fetch tasks' },
+            { status: 500 }
+          );
+        }
+
+        const taskIds = tasks?.map(t => t.id) || [];
+
+        if (taskIds.length === 0) {
+          return NextResponse.json({ submissions: [] });
+        }
+
+        // Get all submissions for these tasks with worker details
+        const { data: submissions, error: submissionsError } = await supabase
+          .from('Submission')
+          .select(`
+            id,
+            taskId,
+            workerId,
+            proofContent,
+            submissionType,
+            status,
+            agreedReward,
+            rejectionReason,
+            revisionNumber,
+            revisionReason,
+            revisionRequestedAt,
+            resubmittedAt,
+            adminNotes,
+            submittedAt,
+            reviewedAt,
+            createdAt,
+            updatedAt,
+            User:workerId (
+              id,
+              piUsername
+            )
+          `)
+          .in('taskId', taskIds)
+          .order('submittedAt', { ascending: false });
+
+        if (submissionsError) {
+          console.error('Error fetching submissions:', submissionsError);
+          return NextResponse.json(
+            { error: 'Failed to fetch submissions' },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({ submissions: submissions || [] });
+      } catch (err) {
+        console.error('Error in employer submissions endpoint:', err);
+        return NextResponse.json(
+          { error: 'Internal server error' },
+          { status: 500 }
+        );
+      }
+    }
 
     // Worker submissions history endpoint
     if (pathname.includes('/worker')) {

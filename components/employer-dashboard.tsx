@@ -55,27 +55,41 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
       setIsLoading(true);
       setError(null);
 
+      // Call new API endpoint to get all submissions for employer's tasks
+      const response = await fetch(`/api/submissions?employerId=${employerId}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch submissions');
+      }
+
+      const data = await response.json();
+      const fetchedSubmissions = data.submissions || [];
+
+      // Transform submissions to include task and worker data
       const allSubmissions: SubmissionWithDetails[] = [];
 
-      // Get submissions for all employer's tasks
-      for (const task of employerTasks) {
-        const taskSubmissions = await getTaskSubmissions(task.id);
+      // Get all tasks map for quick lookup
+      const taskMap = new Map(employerTasks.map(t => [t.id, t]));
 
-        for (const submission of taskSubmissions) {
-          const worker = await getUserById(submission.worker_id);
-          allSubmissions.push({
-            submission,
-            task,
-            worker,
-          });
-        }
+      for (const submission of fetchedSubmissions) {
+        const task = taskMap.get(submission.taskId) || null;
+        const worker = submission.User ? {
+          id: submission.User.id,
+          piUsername: submission.User.piUsername,
+        } as DatabaseUser : null;
+
+        allSubmissions.push({
+          submission: submission as DatabaseTaskSubmission,
+          task,
+          worker,
+        });
       }
 
       // Sort by most recent first
       allSubmissions.sort(
         (a, b) =>
-          new Date(b.submission.submitted_at).getTime() -
-          new Date(a.submission.submitted_at).getTime()
+          new Date(b.submission.submittedAt).getTime() -
+          new Date(a.submission.submittedAt).getTime()
       );
 
       setSubmissions(allSubmissions);
@@ -101,13 +115,13 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
       await approveSubmission(submissionId);
 
       // Create transaction to pay the worker (15% fee taken)
-      const piReward = selectedTask.pi_reward;
+      const piReward = selectedTask.piReward;
       const pipulseFee = piReward * 0.15;
       const workerPay = piReward - pipulseFee;
 
       await createTransaction({
         sender_id: employerId,
-        receiver_id: selectedSubmission.worker_id,
+        receiver_id: selectedSubmission.workerId,
         amount: workerPay,
         pipulse_fee: pipulseFee,
         task_id: selectedTask.id,
@@ -119,7 +133,7 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
 
       // Update task slots
       await updateTask(selectedTask.id, {
-        slots_remaining: selectedTask.slots_remaining - 1,
+        slotsRemaining: selectedTask.slotsRemaining - 1,
       });
 
       // Reload submissions
@@ -151,13 +165,13 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
   };
 
   const pendingSubmissions = submissions.filter(
-    (item) => item.submission.submission_status === 'submitted'
+    (item) => item.submission.status === 'SUBMITTED'
   );
   const approvedSubmissions = submissions.filter(
-    (item) => item.submission.submission_status === 'approved'
+    (item) => item.submission.status === 'APPROVED'
   );
   const rejectedSubmissions = submissions.filter(
-    (item) => item.submission.submission_status === 'rejected'
+    (item) => item.submission.status === 'REJECTED'
   );
 
   if (isLoading) {
@@ -247,14 +261,14 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
                   <div className="flex-1">
                     <h3 className="font-semibold text-foreground">{task?.title}</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Worker: {worker?.pi_username || 'Unknown'}
+                      Worker: {worker?.piUsername || 'Unknown'}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Submitted {new Date(submission.submitted_at).toLocaleDateString()}
+                      Submitted {new Date(submission.submittedAt).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-primary">{task?.pi_reward} π</p>
+                    <p className="text-2xl font-bold text-primary">{task?.piReward} π</p>
                     <Badge variant="outline" className="mt-2 border-orange-500/50 text-orange-400">
                       Pending
                     </Badge>
@@ -290,15 +304,15 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
                   <div className="flex-1">
                     <h3 className="font-semibold text-foreground">{task?.title}</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Worker: {worker?.pi_username || 'Unknown'}
+                      Worker: {worker?.piUsername || 'Unknown'}
                     </p>
                     <p className="text-xs text-green-400 mt-1">
                       Approved on{' '}
-                      {submission.reviewed_at ? new Date(submission.reviewed_at).toLocaleDateString() : 'N/A'}
+                      {submission.reviewedAt ? new Date(submission.reviewedAt).toLocaleDateString() : 'N/A'}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-green-400">{task?.pi_reward} π</p>
+                    <p className="text-2xl font-bold text-green-400">{task?.piReward} π</p>
                     <Badge className="mt-2 bg-green-500/20 border-green-500/50 text-green-400">
                       Approved
                     </Badge>
@@ -335,16 +349,16 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
                   <div className="flex-1">
                     <h3 className="font-semibold text-foreground">{task?.title}</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Worker: {worker?.pi_username || 'Unknown'}
+                      Worker: {worker?.piUsername || 'Unknown'}
                     </p>
-                    {submission.rejection_reason && (
+                    {submission.rejectionReason && (
                       <p className="text-xs text-red-400 mt-1">
-                        Reason: {submission.rejection_reason.substring(0, 50)}...
+                        Reason: {submission.rejectionReason.substring(0, 50)}...
                       </p>
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-foreground">{task?.pi_reward} π</p>
+                    <p className="text-2xl font-bold text-foreground">{task?.piReward} π</p>
                     <Badge className="mt-2 bg-red-500/20 border-red-500/50 text-red-400">
                       Rejected
                     </Badge>
@@ -363,7 +377,7 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
         isOpen={isReviewModalOpen}
         submission={selectedSubmission}
         task={selectedTask}
-        workerUsername={submissions.find((s) => s.submission.id === selectedSubmission?.id)?.worker?.pi_username || null}
+        workerUsername={submissions.find((s) => s.submission.id === selectedSubmission?.id)?.worker?.piUsername || null}
         onClose={() => setIsReviewModalOpen(false)}
         onApprove={handleApproveSubmission}
         onReject={handleRejectSubmission}
