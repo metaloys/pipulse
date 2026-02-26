@@ -253,6 +253,53 @@ export async function createTask(task: Omit<DatabaseTask, 'id' | 'created_at' | 
   return data as DatabaseTask;
 }
 
+export async function repostTask(
+  originalTaskId: string,
+  updates: {
+    deadline: string;
+    slots_available: number;
+    pi_reward: number;
+  }
+) {
+  // Get original task to copy fields from
+  const originalTask = await getTaskById(originalTaskId);
+  if (!originalTask) {
+    console.error('Original task not found:', originalTaskId);
+    return null;
+  }
+
+  // Create new task based on original
+  const newTask = {
+    title: originalTask.title,
+    description: originalTask.description,
+    category: originalTask.category,
+    instructions: originalTask.instructions,
+    proofType: originalTask.proofType,
+    piReward: updates.pi_reward,
+    timeEstimate: originalTask.time_estimate,
+    deadline: updates.deadline,
+    slotsAvailable: updates.slots_available,
+    slotsRemaining: updates.slots_available,
+    taskStatus: 'available',
+    employerId: originalTask.employer_id,
+    parentTaskId: originalTaskId, // Link to original task
+  };
+
+  const { data, error } = await supabase
+    .from('Task')
+    .insert([newTask])
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error reposting task:', error);
+    return null;
+  }
+
+  console.log(`✅ Task reposted: ${originalTaskId} → ${data.id}`);
+  return data as DatabaseTask;
+}
+
 export async function updateTask(taskId: string, updates: Partial<DatabaseTask>) {
   // Build a clean update object with ONLY the fields we want to send
   // Never spread raw database objects - they may contain unwanted fields
@@ -1783,3 +1830,46 @@ export async function updateUserStatsAfterApproval(userId: string, piAmount: num
     return null;
   }
 }
+
+export async function getWorkerHistoryWithEmployer(workerId: string, employerId: string) {
+  try {
+    // Get all submissions from this worker for tasks by this employer
+    const { data, error } = await supabase
+      .from('TaskSubmission')
+      .select(`
+        id,
+        status,
+        task:Task(id, employerId)
+      `)
+      .eq('workerId', workerId)
+      .eq('task.employerId', employerId);
+
+    if (error) {
+      console.error('Error fetching worker history:', error);
+      return {
+        totalTasks: 0,
+        approved: 0,
+        rejected: 0,
+      };
+    }
+
+    const submissions = data || [];
+    const total = submissions.length;
+    const approved = submissions.filter(s => s.status === 'APPROVED').length;
+    const rejected = submissions.filter(s => s.status === 'REJECTED').length;
+
+    return {
+      totalTasks: total,
+      approved,
+      rejected,
+    };
+  } catch (error) {
+    console.error('Error in getWorkerHistoryWithEmployer:', error);
+    return {
+      totalTasks: 0,
+      approved: 0,
+      rejected: 0,
+    };
+  }
+}
+

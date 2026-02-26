@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { getWorkerHistoryWithEmployer } from '@/lib/database';
 import type { DatabaseTaskSubmission, DatabaseTask } from '@/lib/types';
-import { User, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { User, CheckCircle2, XCircle, AlertCircle, TrendingUp } from 'lucide-react';
 
 interface SubmissionReviewModalProps {
   isOpen: boolean;
@@ -34,6 +35,22 @@ export function SubmissionReviewModal({
   const [isRejecting, setIsRejecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [workerHistory, setWorkerHistory] = useState<{
+    totalTasks: number;
+    approved: number;
+    rejected: number;
+  } | null>(null);
+
+  // Fetch worker history when modal opens or when worker/task changes
+  useEffect(() => {
+    if (isOpen && submission && task) {
+      const fetchHistory = async () => {
+        const history = await getWorkerHistoryWithEmployer(submission.workerId, task.employerId);
+        setWorkerHistory(history);
+      };
+      fetchHistory();
+    }
+  }, [isOpen, submission, task]);
 
   const handleApprove = async () => {
     if (!submission || !task) return;
@@ -121,6 +138,40 @@ export function SubmissionReviewModal({
               </div>
             </div>
           </Card>
+
+          {/* Worker History with this Employer */}
+          {workerHistory && (
+            <Card className="glassmorphism p-4 border-blue-500/20 bg-blue-500/5">
+              <div className="flex items-start gap-3">
+                <TrendingUp className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-blue-300">Worker History with this Employer</p>
+                  <div className="flex gap-4 mt-2 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">Total Tasks</p>
+                      <p className="font-bold text-foreground">{workerHistory.totalTasks}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">✅ Approved</p>
+                      <p className="font-bold text-green-400">{workerHistory.approved}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">❌ Rejected</p>
+                      <p className="font-bold text-red-400">{workerHistory.rejected}</p>
+                    </div>
+                    {workerHistory.totalTasks > 0 && (
+                      <div>
+                        <p className="text-muted-foreground text-xs">Approval Rate</p>
+                        <p className="font-bold text-yellow-400">
+                          {Math.round((workerHistory.approved / workerHistory.totalTasks) * 100)}%
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
 
           {/* Submission Type & Status */}
           <div className="flex gap-3">
