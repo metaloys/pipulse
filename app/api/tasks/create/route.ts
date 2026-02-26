@@ -55,8 +55,6 @@ export async function POST(request: Request) {
           description: description.trim(),
           category: category.toLowerCase(),
           piReward: piReward,
-          timeEstimate: 60, // Default 60 minutes
-          requirements: [],
           slotsAvailable: slotsAvailable,
           slotsRemaining: slotsAvailable,
           deadline: deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days default
