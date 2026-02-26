@@ -240,49 +240,37 @@ export async function createTask(task: Omit<DatabaseTask, 'id' | 'created_at' | 
 }
 
 export async function updateTask(taskId: string, updates: Partial<DatabaseTask>) {
-  // If slotsAvailable is being changed, we need to recalculate slotsRemaining
-  let updatesToApply = { ...updates, updatedAt: new Date().toISOString() };
-  
-  // If slotsAvailable is being updated, recalculate slotsRemaining
-  if (updates.slotsAvailable !== undefined) {
-    // Get current task to calculate the difference
+  // Build a clean update object with ONLY the fields we want to send
+  // Never spread raw database objects - they may contain unwanted fields
+  const cleanUpdates: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  // Only copy known fields explicitly from the DatabaseTask interface (snake_case)
+  if (updates.slots_remaining !== undefined) cleanUpdates.slots_remaining = updates.slots_remaining;
+  if (updates.slots_available !== undefined) cleanUpdates.slots_available = updates.slots_available;
+  if (updates.task_status !== undefined) cleanUpdates.task_status = updates.task_status;
+  if (updates.deadline !== undefined) cleanUpdates.deadline = updates.deadline;
+  if (updates.title !== undefined) cleanUpdates.title = updates.title;
+  if (updates.description !== undefined) cleanUpdates.description = updates.description;
+  if (updates.instructions !== undefined) cleanUpdates.instructions = updates.instructions;
+  if (updates.category !== undefined) cleanUpdates.category = updates.category;
+
+  // Auto-evaluate task_status based on slots and deadline
+  if (updates.slots_remaining !== undefined) {
     const currentTask = await getTaskById(taskId);
-    if (currentTask) {
-      const oldSlotsAvailable = currentTask.slotsAvailable;
-      const newSlotsAvailable = updates.slotsAvailable;
-      const difference = newSlotsAvailable - oldSlotsAvailable;
-      
-      // Add the difference to slotsRemaining (positive increase or negative decrease)
-      const newSlotsRemaining = Math.max(0, currentTask.slotsRemaining + difference);
-      updatesToApply.slotsRemaining = newSlotsRemaining;
-      
-      console.log(`♻️ Slots recalculation: available ${oldSlotsAvailable} → ${newSlotsAvailable}, remaining adjusted to ${newSlotsRemaining}`);
-    }
-  }
-  
-  // Auto-evaluate taskStatus based on current state
-  // Task is available if: has remaining slots AND deadline not expired
-  const now = new Date();
-  if (updatesToApply.deadline || updates.slotsRemaining !== undefined) {
-    const currentTask = await getTaskById(taskId);
-    const deadline = updatesToApply.deadline ? new Date(updatesToApply.deadline) : 
-                     (currentTask?.deadline ? new Date(currentTask.deadline) : null);
-    const slotsRemaining = updatesToApply.slotsRemaining !== undefined ? 
-                          updatesToApply.slotsRemaining : 
-                          currentTask?.slotsRemaining;
-    
-    const hasAvailableSlots = slotsRemaining && slotsRemaining > 0;
-    const deadlineNotExpired = deadline && deadline > now;
-    
-    // Auto-set taskStatus: available if has slots AND not expired, completed otherwise
-    updatesToApply.taskStatus = (hasAvailableSlots && deadlineNotExpired) ? 'available' : 'completed';
-    
-    console.log(`📊 Task status auto-evaluated: slots=${slotsRemaining}, deadline=${deadline?.toISOString()}, status=${updatesToApply.taskStatus}`);
+    const slotsRemaining = updates.slots_remaining;
+    const deadline = currentTask?.deadline ? new Date(currentTask.deadline) : null;
+    const now = new Date();
+    const hasSlots = slotsRemaining > 0;
+    const notExpired = deadline ? deadline > now : true;
+    cleanUpdates.task_status = (hasSlots && notExpired) ? 'available' : 'completed';
+    console.log(`📊 Task status: slots=${slotsRemaining}, expired=${!notExpired}, status=${cleanUpdates.task_status}`);
   }
 
   const { data, error } = await supabase
     .from('Task')
-    .update(updatesToApply)
+    .update(cleanUpdates)
     .eq('id', taskId)
     .select()
     .maybeSingle();
