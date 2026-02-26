@@ -83,6 +83,9 @@ model Task {
   taskStatus      TaskStatus      @default(AVAILABLE)
   employerId      String
   employer        User            @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  parentTaskId    String?         // Tracks if this is a repost of another task
+  parentTask      Task?           @relation("taskRepostHistory", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  childTasks      Task[]          @relation("taskRepostHistory")
   views           Int             @default(0)
   isFeatured      Boolean         @default(false)
   featuredUntil   DateTime?
@@ -102,6 +105,7 @@ model Task {
   @@index([category])
   @@index([deadline])
   @@index([deletedAt])
+  @@index([parentTaskId])
 }
 
 enum TaskStatus {
