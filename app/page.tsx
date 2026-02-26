@@ -185,6 +185,13 @@ export default function HomePage() {
 
   const handleSubmitTask = async (taskId: string, proof: string, submissionType: 'text' | 'photo' | 'audio' | 'file') => {
     try {
+      console.log('Task fields:', JSON.stringify({
+        piReward: undefined, // Will check after we get currentTask
+        pi_reward: undefined,
+        reward: undefined,
+        allKeys: undefined
+      }));
+
       // Get the worker ID from Pi Auth context
       if (!userData?.id) {
         throw new Error('User not authenticated. Please login with Pi Network.');
@@ -199,9 +206,18 @@ export default function HomePage() {
       if (!currentTask) {
         throw new Error('Task not found');
       }
+
+      console.log('Task fields:', JSON.stringify({
+        piReward: (currentTask as any).piReward,
+        pi_reward: (currentTask as any).pi_reward,
+        reward: (currentTask as any).reward,
+        allKeys: Object.keys(currentTask)
+      }));
+
+      console.log('🔍 Task object:', JSON.stringify(currentTask));
       
       // STEP 2: Trigger Pi Payment BEFORE creating submission
-      console.log(`💳 [STEP 1] Initiating Pi payment for task reward: ${currentTask.pi_reward}π`);
+      console.log(`💳 [STEP 1] Initiating Pi payment for task reward: ${currentTask.piReward}π`);
       
       // Create a promise that resolves when payment is approved
       const paymentApproved = new Promise<void>((resolve, reject) => {
@@ -212,19 +228,19 @@ export default function HomePage() {
         }
 
         const paymentOptions = {
-          amount: parseFloat(currentTask.pi_reward.toString()),
+          amount: parseFloat(currentTask.piReward.toString()),
           memo: `PiPulse Task: ${currentTask.title}`,
           metadata: {
             taskId: taskId,
             workerId: workerId,
             taskTitle: currentTask.title,
-            taskReward: currentTask.pi_reward,
+            taskReward: currentTask.piReward,
             submissionType: submissionType,
           },
           onComplete: (metadata: any) => {
             console.log(`✅ [STEP 2] Pi payment approved:`, metadata);
             console.log(`   Task: ${currentTask.title}`);
-            console.log(`   Amount: ${currentTask.pi_reward}π`);
+            console.log(`   Amount: ${currentTask.piReward}π`);
             console.log(`   Worker: ${workerId}`);
             resolve();
           },
@@ -259,10 +275,9 @@ export default function HomePage() {
         revision_requested_at: null,
         resubmitted_at: null,
         employer_notes: null,
-        agreed_reward: currentTask.pi_reward, // Store the price worker agreed to
+        agreed_reward: currentTask.piReward ?? currentTask.pi_reward ?? 0,
         submitted_at: new Date().toISOString(),
         reviewed_at: null,
-
       });
 
       if (!submission) {
@@ -271,13 +286,13 @@ export default function HomePage() {
 
       console.log(`✅ [STEP 4] Task submission created with ID: ${submission.id}`);
       
-      // STEP 4: Decrement the slots_remaining for this task
+      // STEP 4: Decrement the slotsRemaining for this task
       console.log(`📉 [STEP 5] Decrementing task slots...`);
-      const newSlotsRemaining = Math.max(0, currentTask.slots_remaining - 1);
+      const newSlotsRemaining = Math.max(0, currentTask.slotsRemaining - 1);
       await updateTask(taskId, {
-        slots_remaining: newSlotsRemaining,
+        slotsRemaining: newSlotsRemaining,
       });
-      console.log(`✅ [STEP 5] Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
+      console.log(`✅ [STEP 5] Task slots updated: ${currentTask.slotsRemaining} → ${newSlotsRemaining}`);
       
       // STEP 5: Refresh tasks after submission
       console.log(`🔄 [STEP 6] Refreshing task list...`);
