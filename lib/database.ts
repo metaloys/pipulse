@@ -257,13 +257,13 @@ export async function updateTask(taskId: string, updates: Partial<DatabaseTask>)
   // Build a clean update object with ONLY the fields we want to send
   // Never spread raw database objects - they may contain unwanted fields
   const cleanUpdates: Record<string, any> = {
-    updated_at: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
-  // Only copy known fields explicitly from the DatabaseTask interface (snake_case)
-  if (updates.slots_remaining !== undefined) cleanUpdates.slots_remaining = updates.slots_remaining;
-  if (updates.slots_available !== undefined) cleanUpdates.slots_available = updates.slots_available;
-  if (updates.task_status !== undefined) cleanUpdates.task_status = updates.task_status;
+  // Only copy known fields explicitly (camelCase - matches Prisma schema)
+  if (updates.slots_remaining !== undefined) cleanUpdates.slotsRemaining = updates.slots_remaining;
+  if (updates.slots_available !== undefined) cleanUpdates.slotsAvailable = updates.slots_available;
+  if (updates.task_status !== undefined) cleanUpdates.taskStatus = updates.task_status;
   if (updates.deadline !== undefined) cleanUpdates.deadline = updates.deadline;
   if (updates.title !== undefined) cleanUpdates.title = updates.title;
   if (updates.description !== undefined) cleanUpdates.description = updates.description;
@@ -278,8 +278,8 @@ export async function updateTask(taskId: string, updates: Partial<DatabaseTask>)
     const now = new Date();
     const hasSlots = slotsRemaining > 0;
     const notExpired = deadline ? deadline > now : true;
-    cleanUpdates.task_status = (hasSlots && notExpired) ? 'available' : 'completed';
-    console.log(`📊 Task status: slots=${slotsRemaining}, expired=${!notExpired}, status=${cleanUpdates.task_status}`);
+    cleanUpdates.taskStatus = (hasSlots && notExpired) ? 'available' : 'completed';
+    console.log(`📊 Task status: slots=${slotsRemaining}, expired=${!notExpired}, status=${cleanUpdates.taskStatus}`);
   }
 
   const { data, error } = await supabase
