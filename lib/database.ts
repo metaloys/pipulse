@@ -323,10 +323,30 @@ export async function getTasksByEmployer(employerId: string) {
 
 // ============ TASK SUBMISSIONS ============
 
-export async function submitTask(submission: Omit<DatabaseTaskSubmission, 'id' | 'created_at' | 'updated_at'>) {
-  const { data, error } = await supabase
+export async function submitTask(data: any) {
+  const submissionRecord = {
+    id: crypto.randomUUID(),
+    taskId: data.task_id || data.taskId,
+    workerId: data.worker_id || data.workerId,
+    proofContent: data.proof_content || data.proofContent,
+    submissionType: data.submission_type || data.submissionType,
+    status: data.submission_status || data.status || 'submitted',
+    agreedReward: data.agreed_reward || data.agreedReward,
+    rejectionReason: data.rejection_reason || null,
+    revisionNumber: data.revision_number || 0,
+    revisionReason: data.revision_requested_reason || data.revisionReason || null,
+    revisionRequestedAt: data.revision_requested_at || data.revisionRequestedAt || null,
+    resubmittedAt: data.resubmitted_at || data.resubmittedAt || null,
+    adminNotes: data.employer_notes || data.admin_notes || data.adminNotes || null,
+    submittedAt: data.submitted_at || data.submittedAt || new Date().toISOString(),
+    reviewedAt: data.reviewed_at || data.reviewedAt || null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const { data: result, error } = await supabase
     .from('Submission')
-    .insert([submission])
+    .insert([submissionRecord])
     .select()
     .maybeSingle();
 
@@ -334,7 +354,7 @@ export async function submitTask(submission: Omit<DatabaseTaskSubmission, 'id' |
     console.error('Error submitting task:', error);
     return null;
   }
-  return data as DatabaseTaskSubmission;
+  return result;
 }
 
 export async function getWorkerSubmissions(workerId: string) {
