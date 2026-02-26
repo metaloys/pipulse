@@ -56,7 +56,11 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
       setError(null);
 
       // Call new API endpoint to get all submissions for employer's tasks
-      const response = await fetch(`/api/submissions?employerId=${employerId}`);
+      const response = await fetch(`/api/submissions?employerId=${employerId}`, {
+        headers: {
+          'x-user-id': employerId,
+        }
+      });
       
       if (!response.ok) {
         throw new Error('Failed to fetch submissions');
