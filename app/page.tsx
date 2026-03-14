@@ -183,7 +183,7 @@ export default function HomePage() {
     setIsSubmissionModalOpen(true);
   };
 
-  const handleSubmitTask = async (taskId: string, proof: string, submissionType: 'text' | 'photo' | 'audio' | 'file') => {
+  const handleSubmitTask = async (taskId: string, proof: string, submissionType: 'TEXT' | 'PHOTO' | 'AUDIO' | 'FILE') => {
     try {
       console.log('Task fields:', JSON.stringify({
         piReward: undefined, // Will check after we get currentTask
@@ -192,12 +192,12 @@ export default function HomePage() {
         allKeys: undefined
       }));
 
-      // Get the worker ID from Pi Auth context
-      if (!userData?.id) {
+      // Get the worker ID from Pi Auth context (use database user ID, not Pi user ID)
+      if (!user?.id) {
         throw new Error('User not authenticated. Please login with Pi Network.');
       }
 
-      const workerId = userData.id;
+      const workerId = user.id;
       
       console.log(`📝 Submitting task proof for task: ${taskId}`);
       
@@ -227,7 +227,7 @@ export default function HomePage() {
         worker_id: workerId,
         proof_content: proof,
         submission_type: submissionType,
-        submission_status: 'submitted',
+        submission_status: 'SUBMITTED',
         rejection_reason: null,
         revision_number: 0,
         revision_requested_reason: null,
