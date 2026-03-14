@@ -1143,7 +1143,9 @@ export async function approveTaskSubmission(input: {
   employerNotes?: string;
 }): Promise<boolean> {
   try {
-    // Update submission status
+    console.log('🔄 Starting submission approval for:', input.submissionId);
+
+    // Step 1: Update submission status to APPROVED
     const { error: updateError } = await supabase
       .from('Submission')
       .update({
@@ -1153,22 +1155,56 @@ export async function approveTaskSubmission(input: {
       })
       .eq('id', input.submissionId);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error('❌ Error updating submission:', updateError);
+      throw updateError;
+    }
+    console.log('✅ Submission updated to APPROVED');
 
-    // Create approval notification via SQL function
-    const { error: notifError } = await supabase
-      .rpc('create_approval_notification', {
-        p_worker_id: input.workerId,
-        p_task_id: input.taskId,
-        p_submission_id: input.submissionId,
-        p_task_reward: input.taskReward,
-      });
+    // Step 2: Create transaction record for payment
+    const { error: transactionError } = await supabase
+      .from('Transaction')
+      .insert([{
+        senderId: null, // Will be filled by escrow system
+        receiverId: input.workerId,
+        amount: input.taskReward,
+        pipulseFee: 0,
+        taskId: input.taskId,
+        submissionId: input.submissionId,
+        type: 'APPROVAL',
+        status: 'PENDING',
+        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }]);
 
-    if (notifError) console.error('Error creating notification:', notifError);
+    if (transactionError) {
+      console.error('⚠️ Error creating transaction (non-blocking):', transactionError);
+      // Don't throw - this is non-blocking
+    } else {
+      console.log('✅ Transaction created for payment');
+    }
 
+    // Step 3: Update worker's earnings
+    const { data: worker, error: workerError } = await supabase
+      .from('User')
+      .select('totalEarnings')
+      .eq('id', input.workerId)
+      .maybeSingle();
+
+    if (!workerError && worker) {
+      const newEarnings = (worker.totalEarnings || 0) + input.taskReward;
+      await supabase
+        .from('User')
+        .update({ totalEarnings: newEarnings })
+        .eq('id', input.workerId);
+      console.log('✅ Worker earnings updated:', newEarnings);
+    }
+
+    console.log('✅ Submission approval complete');
     return true;
   } catch (error) {
-    console.error('Error approving submission:', error);
+    console.error('❌ Error approving submission:', error);
     return false;
   }
 }
@@ -1838,7 +1874,7 @@ export async function getWorkerHistoryWithEmployer(workerId: string, employerId:
   try {
     // Get all submissions from this worker for tasks by this employer
     const { data, error } = await supabase
-      .from('TaskSubmission')
+      .from('Submission')
       .select(`
         id,
         status,

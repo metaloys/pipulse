@@ -72,23 +72,24 @@ export async function POST(req: NextRequest) {
 
     // Approve endpoint
     if (pathname.includes('/approve')) {
-      const { submissionId, taskId, taskReward, employerNotes } = body;
+      const { submissionId, taskId, workerId, piReward, taskReward, employerNotes } = body;
+      const reward = piReward || taskReward;
 
-      if (!submissionId || !taskId || !taskReward) {
+      if (!submissionId || !taskId || !workerId || !reward) {
+        console.error('❌ Missing fields in approve:', { submissionId, taskId, workerId, reward });
         return NextResponse.json(
-          { error: 'Missing required fields' },
+          { error: 'Missing required fields: submissionId, taskId, workerId, piReward or taskReward' },
           { status: 400 }
         );
       }
 
-      // Verify user is the employer
-      // TODO: Add employer verification
+      console.log('✅ Approving submission:', { submissionId, taskId, workerId, reward });
 
       const success = await approveTaskSubmission({
         submissionId,
         taskId,
-        workerId: body.workerId, // From request body
-        taskReward,
+        workerId,
+        taskReward: reward,
         employerNotes,
       });
 
