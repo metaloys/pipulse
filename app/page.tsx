@@ -113,11 +113,11 @@ export default function HomePage() {
         setLeaderboardEntries(formattedLeaderboard);
 
         // Fetch real user stats if logged in
-        if (userData?.id) {
-          const realStats = await getUserStats(userData.id);
+        if (user?.id) {
+          const realStats = await getUserStats(user.id);
           if (realStats) {
             console.log('📊 User stats loaded from database:', {
-              userId: userData.id,
+              userId: user.id,
               dailyEarnings: realStats.dailyEarnings,
               weeklyEarnings: realStats.weeklyEarnings,
               totalEarnings: realStats.totalEarnings,
@@ -127,7 +127,7 @@ export default function HomePage() {
             });
             setUserStats(realStats);
           } else {
-            console.warn('⚠️ No stats returned for user:', userData.id);
+            console.warn('⚠️ No stats returned for user:', user.id);
           }
         } else {
           console.warn('⚠️ userData.id not available');
