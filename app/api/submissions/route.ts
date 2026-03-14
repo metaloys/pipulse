@@ -75,15 +75,27 @@ export async function POST(req: NextRequest) {
       const { submissionId, taskId, workerId, piReward, taskReward, employerNotes } = body;
       const reward = piReward || taskReward;
 
-      if (!submissionId || !taskId || !workerId || !reward) {
-        console.error('❌ Missing fields in approve:', { submissionId, taskId, workerId, reward });
+      console.log('🔄 Approve endpoint received:', { submissionId, taskId, workerId, reward, body });
+
+      if (!submissionId || !taskId || !workerId) {
+        const errorMsg = `Missing required fields: submissionId=${submissionId}, taskId=${taskId}, workerId=${workerId}`;
+        console.error('❌ ' + errorMsg);
         return NextResponse.json(
-          { error: 'Missing required fields: submissionId, taskId, workerId, piReward or taskReward' },
+          { error: errorMsg },
           { status: 400 }
         );
       }
 
-      console.log('✅ Approving submission:', { submissionId, taskId, workerId, reward });
+      if (!reward || reward <= 0) {
+        const errorMsg = `Invalid reward amount: piReward=${piReward}, taskReward=${taskReward}, resolved=${reward}`;
+        console.error('❌ ' + errorMsg);
+        return NextResponse.json(
+          { error: errorMsg },
+          { status: 400 }
+        );
+      }
+
+      console.log('✅ All fields valid, calling approveTaskSubmission');
 
       const success = await approveTaskSubmission({
         submissionId,
@@ -94,12 +106,15 @@ export async function POST(req: NextRequest) {
       });
 
       if (!success) {
+        const errorMsg = 'Database operation failed during approval';
+        console.error('❌ ' + errorMsg);
         return NextResponse.json(
-          { error: 'Failed to approve submission' },
+          { error: errorMsg },
           { status: 500 }
         );
       }
 
+      console.log('✅ Submission approval complete');
       return NextResponse.json({
         message: 'Submission approved and payment processed',
       });

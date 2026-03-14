@@ -115,6 +115,17 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
     try {
       if (!selectedSubmission || !selectedTask) return;
 
+      // Get the reward - might be piReward or pi_reward depending on data source
+      const reward = (selectedTask as any).piReward ?? (selectedTask as any).pi_reward ?? 0;
+
+      console.log('💾 Sending approval request:', {
+        submissionId,
+        taskId: selectedTask.id,
+        workerId: selectedSubmission.workerId,
+        piReward: reward,
+        taskFields: Object.keys(selectedTask).slice(0, 10),
+      });
+
       // Call the approve endpoint which handles all the approval logic
       const response = await fetch('/api/submissions/approve', {
         method: 'POST',
@@ -123,13 +134,22 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
           submissionId,
           taskId: selectedTask.id,
           workerId: selectedSubmission.workerId,
-          piReward: selectedTask.piReward,
+          piReward: reward,
         }),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to approve submission');
+        console.error('❌ Approval failed:', {
+          status: response.status,
+          error: responseData.error,
+          response: responseData,
+        });
+        throw new Error(responseData.error || 'Failed to approve submission');
       }
+
+      console.log('✅ Submission approved successfully');
 
       // Reload submissions
       await loadSubmissions();
