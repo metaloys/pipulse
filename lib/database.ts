@@ -88,14 +88,17 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
       .insert([{
         id: userId,
         piUsername: username,
-        piWallet: null, // Don't send empty string, use null
-        userRole: 'WORKER', // Default role - users start as workers
+        piWallet: null,
+        userRole: 'WORKER',
         level: 'NEWCOMER',
         currentStreak: 0,
         longestStreak: 0,
         lastActiveDate: new Date().toISOString(),
         totalEarnings: 0,
         totalTasksCompleted: 0,
+        status: 'ACTIVE',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       }])
       .select()
       .maybeSingle();

@@ -63,7 +63,10 @@ export async function POST(request: NextRequest) {
         longestStreak: 0,
         totalEarnings: 0,
         totalTasksCompleted: 0,
+        status: 'ACTIVE',
         lastActiveDate: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       }])
       .select()
       .maybeSingle();
