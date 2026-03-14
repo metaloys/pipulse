@@ -20,6 +20,8 @@ export async function POST(request: Request) {
       employerId,
     } = body;
 
+    console.log('📝 Task creation request:', { title, category, piReward, slotsAvailable, employerId });
+
     // Validate required fields
     if (!title?.trim()) {
       return Response.json({ error: 'Title is required' }, { status: 400 });
@@ -47,38 +49,43 @@ export async function POST(request: Request) {
     }
 
     // Create task in database
+    const taskData = {
+      title: title.trim(),
+      description: description.trim(),
+      category: category.toLowerCase(),
+      piReward: piReward,
+      timeEstimate: 60, // Default 60 minutes
+      slotsAvailable: slotsAvailable,
+      slotsRemaining: slotsAvailable,
+      deadline: deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      employerId: employerId,
+      taskStatus: 'AVAILABLE',
+      instructions: body.instructions || `Complete this ${category} task. Proof type: ${proofType}`,
+      proofType: proofType,
+    };
+
+    console.log('🔍 Task data to insert:', taskData);
+
     const { data, error } = await supabase
       .from('Task')
-      .insert([
-        {
-          id: crypto.randomUUID(),
-          title: title.trim(),
-          description: description.trim(),
-          category: category.toLowerCase(),
-          piReward: piReward,
-          timeEstimate: 60, // Default 60 minutes
-          slotsAvailable: slotsAvailable,
-          slotsRemaining: slotsAvailable,
-          deadline: deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days default
-          employerId: employerId,
-          taskStatus: 'AVAILABLE',
-          instructions: body.instructions || `Complete this ${category} task. Proof type: ${proofType}`,
-          proofType: proofType,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ])
+      .insert([taskData])
       .select()
       .maybeSingle();
 
     if (error) {
-      console.error('Error creating task:', error);
+      console.error('❌ Error creating task:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
       return Response.json(
-        { error: 'Failed to create task', details: error.message },
+        { error: 'Failed to create task', details: error.message, code: error.code },
         { status: 500 }
       );
     }
 
+    console.log('✅ Task created successfully:', data?.id);
     return Response.json(
       {
         success: true,
@@ -88,7 +95,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (err) {
-    console.error('Task create error:', JSON.stringify({
+    console.error('❌ Task create error:', JSON.stringify({
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
       error: err,
