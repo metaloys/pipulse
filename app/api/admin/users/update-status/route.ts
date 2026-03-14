@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient();
 
     const { error } = await supabase
-      .from('users')
+      .from('User')
       .update({ status })
       .eq('id', userId);
 

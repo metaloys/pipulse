@@ -17,9 +17,9 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseClient();
 
     const { data: users, error } = await supabase
-      .from('users')
-      .select('id, piUsername, piWalletAddress, totalEarnings, totalTasksCompleted, role, status, createdAt')
-      .order('created_at', { ascending: false });
+      .from('User')
+      .select('id, piUsername, piWallet, totalEarnings, totalTasksCompleted, userRole, status, createdAt')
+      .order('createdAt', { ascending: false });
 
     if (error) throw error;
 

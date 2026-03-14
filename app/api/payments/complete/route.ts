@@ -233,8 +233,8 @@ export async function POST(request: NextRequest) {
         console.log(`\n💰 [STEP 3] Preparing worker earnings update for: ${workerId}`);
         const userUpdatePromise = (async () => {
           const { data: userData, error: userFetchError } = await supabaseAdmin
-            .from('users')
-            .select('total_earnings, total_tasks_completed')
+            .from('User')
+            .select('totalEarnings, totalTasksCompleted')
             .eq('id', workerId)
             .maybeSingle();
 
@@ -250,14 +250,14 @@ export async function POST(request: NextRequest) {
 
           // Use agreedReward (price protection) instead of current paymentDetailsAmount
           const paymentAmount = agreedReward || paymentDetailsAmount;
-          const newTotalEarnings = (userData.total_earnings || 0) + paymentAmount;
-          const newTasksCompleted = (userData.total_tasks_completed || 0) + 1;
+          const newTotalEarnings = (userData.totalEarnings || 0) + paymentAmount;
+          const newTasksCompleted = (userData.totalTasksCompleted || 0) + 1;
 
           const { data: updatedUser, error: updateError } = await supabaseAdmin
             .from('User')
             .update({
-              total_earnings: newTotalEarnings,
-              total_tasks_completed: newTasksCompleted,
+              totalEarnings: newTotalEarnings,
+              totalTasksCompleted: newTasksCompleted,
               updatedAt: new Date().toISOString(),
             })
             .eq('id', workerId)
@@ -271,8 +271,8 @@ export async function POST(request: NextRequest) {
 
           if (updatedUser) {
             console.log(`✅ [STEP 3] Worker earnings updated:`);
-            console.log(`   New total earnings: ${updatedUser.total_earnings}π`);
-            console.log(`   New tasks completed: ${updatedUser.total_tasks_completed}`);
+            console.log(`   New total earnings: ${updatedUser.totalEarnings}π`);
+            console.log(`   New tasks completed: ${updatedUser.totalTasksCompleted}`);
           }
         })();
         dbUpdates.push(userUpdatePromise);
@@ -313,17 +313,15 @@ export async function POST(request: NextRequest) {
           const { error: txError } = await supabaseAdmin
             .from('Transaction')
             .insert([{
-              task_id: taskId,
-              sender_id: employerId, // FIXED: Use employer's UUID from users table
-              receiver_id: workerId, // FIXED: Use worker's UUID from users table
-              amount: agreedReward || paymentDetailsAmount, // Use agreed_reward (price protection)
-              pipulse_fee: pipulseFee,
-              pi_blockchain_txid: txid, // FIXED: Store blockchain tx ID here, not as sender_id
-              transaction_type: 'payment',
-              transaction_status: 'completed',
+              taskId: taskId,
+              senderId: employerId,
+              receiverId: workerId,
+              amount: agreedReward || paymentDetailsAmount,
+              pipulseFee: pipulseFee,
+              piBlockchainTxId: txid,
+              type: 'PAYMENT',
+              status: 'COMPLETED',
               timestamp: new Date().toISOString(),
-              created_at: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
             }]);
 
           if (txError) {
