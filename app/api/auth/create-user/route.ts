@@ -6,13 +6,23 @@ export async function POST(request: NextRequest) {
     const url = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+    console.log('📋 Env vars check:', {
+      url: url ? `✅ ${url.substring(0, 30)}...` : '❌ Missing',
+      key: key ? `✅ Present (${key.length} chars)` : '❌ Missing',
+    });
+
     if (!url || !key) {
       console.error('❌ Missing env vars:', { url: !!url, key: !!key });
-      return NextResponse.json({ error: 'Missing env vars' }, { status: 500 });
+      return NextResponse.json({ error: 'Missing env vars', details: { url: !!url, key: !!key } }, { status: 500 });
     }
 
+    console.log('🔧 Creating Supabase client with URL:', url);
     const supabase = createClient(url, key);
-    const { piUid, piUsername } = await request.json();
+    
+    const body = await request.json();
+    const { piUid, piUsername } = body;
+
+    console.log('📥 Request body:', { piUid, piUsername });
 
     if (!piUid || !piUsername) {
       console.error('❌ Missing fields:', { piUid, piUsername });
@@ -29,7 +39,11 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (checkError) {
-      console.error('⚠️  Error checking existing user:', checkError.message);
+      console.error('⚠️  Error checking existing user:', {
+        message: checkError.message,
+        code: checkError.code,
+        details: checkError.details,
+      });
     }
 
     if (existingByUid) {
@@ -85,7 +99,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Unexpected error:', error);
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return NextResponse.json({ error: String(error), stack: error instanceof Error ? error.stack : undefined }, { status: 500 });
   }
 }
 
