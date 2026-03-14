@@ -95,8 +95,8 @@ export default function HomePage() {
         // Filter out user's own tasks when in worker mode
         // (a user shouldn't accept their own tasks)
         let availableTasks = tasksData;
-        if (userRole === 'worker' && userData?.id) {
-          availableTasks = tasksData.filter(task => task.employerId !== userData.id);
+        if (userRole === 'worker' && user?.id) {
+          availableTasks = tasksData.filter(task => task.employerId !== user.id);
           console.log(`📋 Filtered tasks: ${tasksData.length} total, ${availableTasks.length} available for worker (excluded ${tasksData.length - availableTasks.length} own tasks)`);
         }
         
