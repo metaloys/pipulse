@@ -115,15 +115,20 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
     try {
       if (!selectedSubmission || !selectedTask) return;
 
-      // Get the reward - might be piReward or pi_reward depending on data source
-      const reward = (selectedTask as any).piReward ?? (selectedTask as any).pi_reward ?? 0;
+      // Get agreedReward from the submission (locked price at submission time)
+      // Fall back to task reward if not available
+      const agreedReward = (selectedSubmission as any).agreedReward ?? 
+                           (selectedSubmission as any).agreed_reward ?? 
+                           (selectedTask as any).piReward ?? 
+                           (selectedTask as any).pi_reward ?? 
+                           0;
 
       console.log('💾 Sending approval request:', {
         submissionId,
-        taskId: selectedTask.id,
         workerId: selectedSubmission.workerId,
-        piReward: reward,
-        taskFields: Object.keys(selectedTask).slice(0, 10),
+        agreedReward,
+        taskId: selectedTask.id,
+        submissionFields: Object.keys(selectedSubmission).slice(0, 10),
       });
 
       // Call the approve endpoint which handles all the approval logic
@@ -132,9 +137,8 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           submissionId,
-          taskId: selectedTask.id,
           workerId: selectedSubmission.workerId,
-          piReward: reward,
+          agreedReward,
         }),
       });
 

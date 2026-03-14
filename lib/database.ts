@@ -1099,6 +1099,18 @@ export async function submitTaskSubmission(input: {
   try {
     const revisionNumber = input.revisionNumber || 1;
 
+    // First, fetch the task to get its piReward (locks price at submission time)
+    const { data: taskData, error: taskError } = await supabase
+      .from('Task')
+      .select('piReward')
+      .eq('id', input.taskId)
+      .single();
+
+    if (taskError || !taskData) {
+      console.error('Error fetching task for reward amount:', taskError);
+      throw new Error('Could not find task or its reward amount');
+    }
+
     const { data, error } = await supabase
       .from('Submission')
       .insert({
@@ -1107,6 +1119,7 @@ export async function submitTaskSubmission(input: {
         proofContent: input.proofContent,
         submissionType: input.submissionType,
         status: revisionNumber > 1 ? 'REVISION_RESUBMITTED' : 'SUBMITTED',
+        agreedReward: taskData.piReward, // Lock the price at submission time
         revisionNumber: revisionNumber,
         resubmittedAt: revisionNumber > 1 ? new Date().toISOString() : null,
         submittedAt: new Date().toISOString(),
