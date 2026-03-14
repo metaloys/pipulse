@@ -134,8 +134,8 @@ export default function HomePage() {
         }
 
         // If user is an employer, load their tasks
-        if (userData?.id && userRole === 'employer') {
-          const userEmployerTasks = await getTasksByEmployer(userData.id);
+        if (user?.id && userRole === 'employer') {
+          const userEmployerTasks = await getTasksByEmployer(user.id);
           setEmployerTasks(userEmployerTasks);
         }
       } catch (error) {
@@ -435,8 +435,8 @@ export default function HomePage() {
               />
             </div>
 
-            {userData?.id && employerTasks.length > 0 ? (
-              <EmployerDashboard employerId={userData.id} employerTasks={employerTasks} />
+            {user?.id && employerTasks.length > 0 ? (
+              <EmployerDashboard employerId={user.id} employerTasks={employerTasks} />
             ) : (
               <div className="glassmorphism p-8 border-white/10 rounded-lg text-center">
                 <Plus className="w-12 h-12 text-primary mx-auto mb-4" />
@@ -446,9 +446,9 @@ export default function HomePage() {
                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
                   Get work done by verified Pioneers. Pay only for completed tasks with Pi coins.
                 </p>
-                {userData?.id && userData.username && (
+                {user?.id && userData.username && (
                   <CreateTaskModal
-                    employerId={userData.id}
+                    employerId={user.id}
                     employerUsername={userData.username}
                     onTaskCreated={() => {
                       // Reload employer tasks
