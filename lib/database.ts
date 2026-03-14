@@ -508,7 +508,7 @@ export async function getUserTransactions(userId: string) {
   const { data, error } = await supabase
     .from('Transaction')
     .select('*')
-    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+    .or(`senderId.eq.${userId},receiverId.eq.${userId}`)
     .order('timestamp', { ascending: false });
 
   if (error) {
@@ -683,9 +683,9 @@ export async function getUserStats(userId: string) {
       weeklyEarnings: parseFloat((parseFloat(String(weeklyEarnings || 0)) || 0).toFixed(2)),
       totalEarnings: parseFloat((parseFloat(String(totalEarnings || 0)) || 0).toFixed(2)),
       tasksCompleted: transactions.length, // Count of completed transactions
-      currentStreak: user.current_streak || 0,
+      currentStreak: user.currentStreak || 0,
       level: user.level || 'Newcomer',
-      availableTasksCount: submissions.filter((s: any) => s.submission_status === 'submitted').length,
+      availableTasksCount: submissions.filter((s: any) => s.status === 'SUBMITTED').length,
     };
   } catch (error) {
     console.error('Error getting user stats:', error);
@@ -965,7 +965,7 @@ export async function getPendingDisputeCount() {
   const { data, error } = await supabase
     .from('Dispute')
     .select('*', { count: 'exact', head: true })
-    .eq('dispute_status', 'pending');
+    .eq('status', 'PENDING');
 
   if (error) {
     console.error('Error counting disputes:', error);
@@ -986,8 +986,8 @@ export async function getUnreadNotificationCount(userId: string): Promise<number
     const { count, error } = await supabase
       .from('Notification')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('is_read', false);
+      .eq('userId', userId)
+      .eq('read', false);
 
     if (error) throw error;
     return count || 0;
@@ -1009,8 +1009,8 @@ export async function getNotifications(
     const { data, error } = await supabase
       .from('Notification')
       .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
+      .eq('userId', userId)
+      .order('createdAt', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) throw error;
@@ -1032,9 +1032,9 @@ export async function getUnreadNotifications(
     const { data, error } = await supabase
       .from('Notification')
       .select('*')
-      .eq('user_id', userId)
-      .eq('is_read', false)
-      .order('created_at', { ascending: false })
+      .eq('userId', userId)
+      .eq('read', false)
+      .order('createdAt', { ascending: false })
       .limit(limit);
 
     if (error) throw error;
@@ -1052,7 +1052,7 @@ export async function markNotificationAsRead(notificationId: string): Promise<bo
   try {
     const { error } = await supabase
       .from('Notification')
-      .update({ is_read: true, read_at: new Date().toISOString() })
+      .update({ read: true })
       .eq('id', notificationId);
 
     if (error) throw error;
@@ -1070,9 +1070,9 @@ export async function markAllNotificationsAsRead(userId: string): Promise<boolea
   try {
     const { error } = await supabase
       .from('Notification')
-      .update({ is_read: true, read_at: new Date().toISOString() })
-      .eq('user_id', userId)
-      .eq('is_read', false);
+      .update({ read: true })
+      .eq('userId', userId)
+      .eq('read', false);
 
     if (error) throw error;
     return true;
@@ -1102,14 +1102,14 @@ export async function submitTaskSubmission(input: {
     const { data, error } = await supabase
       .from('Submission')
       .insert({
-        task_id: input.taskId,
-        worker_id: input.workerId,
-        proof_content: input.proofContent,
-        submission_type: input.submissionType,
-        submission_status: revisionNumber > 1 ? 'revision_resubmitted' : 'submitted',
-        revision_number: revisionNumber,
-        resubmitted_at: revisionNumber > 1 ? new Date().toISOString() : null,
-        submitted_at: new Date().toISOString(),
+        taskId: input.taskId,
+        workerId: input.workerId,
+        proofContent: input.proofContent,
+        submissionType: input.submissionType,
+        status: revisionNumber > 1 ? 'REVISION_RESUBMITTED' : 'SUBMITTED',
+        revisionNumber: revisionNumber,
+        resubmittedAt: revisionNumber > 1 ? new Date().toISOString() : null,
+        submittedAt: new Date().toISOString(),
       })
       .select()
       .single();
@@ -1121,8 +1121,8 @@ export async function submitTaskSubmission(input: {
       await supabase
         .from('task_revision_locks')
         .delete()
-        .eq('task_id', input.taskId)
-        .eq('worker_id', input.workerId);
+        .eq('taskId', input.taskId)
+        .eq('workerId', input.workerId);
     }
 
     return data as DatabaseTaskSubmission;
@@ -1147,9 +1147,9 @@ export async function approveTaskSubmission(input: {
     const { error: updateError } = await supabase
       .from('Submission')
       .update({
-        submission_status: 'approved',
-        reviewed_at: new Date().toISOString(),
-        employer_notes: input.employerNotes || 'Approved',
+        status: 'APPROVED',
+        reviewedAt: new Date().toISOString(),
+        adminNotes: input.employerNotes || 'Approved',
       })
       .eq('id', input.submissionId);
 
@@ -1188,10 +1188,10 @@ export async function rejectTaskSubmission(input: {
     const { error: updateError } = await supabase
       .from('Submission')
       .update({
-        submission_status: 'rejected',
-        rejection_reason: input.rejectionReason,
-        reviewed_at: new Date().toISOString(),
-        employer_notes: input.employerNotes || input.rejectionReason,
+        status: 'REJECTED',
+        rejectionReason: input.rejectionReason,
+        reviewedAt: new Date().toISOString(),
+        adminNotes: input.employerNotes || input.rejectionReason,
       })
       .eq('id', input.submissionId);
 
@@ -1231,10 +1231,10 @@ export async function requestTaskRevision(input: {
     const { error: updateError } = await supabase
       .from('Submission')
       .update({
-        submission_status: 'revision_requested',
-        revision_requested_reason: input.revisionReason,
-        revision_requested_at: new Date().toISOString(),
-        employer_notes: input.employerNotes || input.revisionReason,
+        status: 'REVISION_REQUESTED',
+        revisionReason: input.revisionReason,
+        revisionRequestedAt: new Date().toISOString(),
+        adminNotes: input.employerNotes || input.revisionReason,
       })
       .eq('id', input.submissionId);
 
@@ -1279,17 +1279,17 @@ export async function getWorkerSubmissionsWithFilters(
     let query = supabase
       .from('Submission')
       .select('*')
-      .eq('worker_id', workerId);
+      .eq('workerId', workerId);
 
     if (filters?.status) {
-      query = query.eq('submission_status', filters.status);
+      query = query.eq('status', filters.status);
     }
 
     if (filters?.taskId) {
-      query = query.eq('task_id', filters.taskId);
+      query = query.eq('taskId', filters.taskId);
     }
 
-    query = query.order('submitted_at', { ascending: false });
+    query = query.order('submittedAt', { ascending: false });
 
     if (filters?.limit) {
       const offset = filters.offset || 0;
@@ -1323,10 +1323,10 @@ export async function getWorkerSubmissionStats(
 
     return {
       totalSubmissions: submissions.length,
-      approved: submissions.filter(s => s.submission_status === 'approved').length,
-      rejected: submissions.filter(s => s.submission_status === 'rejected').length,
-      revisionRequested: submissions.filter(s => s.submission_status === 'revision_requested').length,
-      disputed: submissions.filter(s => s.submission_status === 'disputed').length,
+      approved: submissions.filter(s => s.status === 'APPROVED').length,
+      rejected: submissions.filter(s => s.status === 'REJECTED').length,
+      revisionRequested: submissions.filter(s => s.status === 'REVISION_REQUESTED').length,
+      disputed: submissions.filter(s => s.status === 'DISPUTED').length,
     };
   } catch (error) {
     console.error('Error fetching worker submission stats:', error);
@@ -1362,8 +1362,8 @@ export async function triggerAutoApprovals(): Promise<{
     const { count } = await supabase
       .from('Submission')
       .select('*', { count: 'exact', head: true })
-      .eq('submission_status', 'approved')
-      .gte('reviewed_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());
+      .eq('status', 'APPROVED')
+      .gte('reviewedAt', new Date(Date.now() - 5 * 60 * 1000).toISOString());
 
     return {
       approved: count || 0,
@@ -1528,9 +1528,9 @@ export async function hasRevisionLock(taskId: string, workerId: string): Promise
     const { data, error } = await supabase
       .from('task_revision_locks')
       .select('id')
-      .eq('task_id', taskId)
-      .eq('worker_id', workerId)
-      .gt('locked_until', new Date().toISOString())
+      .eq('taskId', taskId)
+      .eq('workerId', workerId)
+      .gt('lockedUntil', new Date().toISOString())
       .single();
 
     if (error && error.code !== 'PGRST116') throw error; // 404 is expected
@@ -1556,8 +1556,8 @@ export function subscribeToNotifications(
       {
         event: 'INSERT',
         schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${userId}`,
+        table: 'Notification',
+        filter: `userId=eq.${userId}`,
       },
       (payload) => {
         callback(payload.new);
