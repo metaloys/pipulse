@@ -88,9 +88,9 @@ export async function createOrUpdateUserOnAuth(userId: string, username: string)
       .insert([{
         id: userId,
         piUsername: username,
-        piWalletAddress: null, // CRITICAL FIX: Don't send empty string, use null
-        userRole: 'worker', // Default role - users start as workers
-        level: 'Newcomer',
+        piWallet: null, // Don't send empty string, use null
+        userRole: 'WORKER', // Default role - users start as workers
+        level: 'NEWCOMER',
         currentStreak: 0,
         longestStreak: 0,
         lastActiveDate: new Date().toISOString(),
@@ -190,7 +190,7 @@ export async function getAllTasks() {
         piUsername
       )
     `)
-    .eq('taskStatus', 'available')
+    .eq('taskStatus', 'AVAILABLE')
     .is('deletedAt', null)  // Exclude soft-deleted tasks
     .gt('slotsRemaining', 0)  // Only show tasks with available slots
     .order('createdAt', { ascending: false });
@@ -213,7 +213,7 @@ export async function getTasksByCategory(category: string) {
       )
     `)
     .eq('category', category)
-    .eq('taskStatus', 'available')
+    .eq('taskStatus', 'AVAILABLE')
     .is('deletedAt', null)  // Exclude soft-deleted tasks
     .gt('slotsRemaining', 0)  // Only show tasks with available slots
     .order('createdAt', { ascending: false });
@@ -280,7 +280,7 @@ export async function repostTask(
     deadline: updates.deadline,
     slotsAvailable: updates.slots_available,
     slotsRemaining: updates.slots_available,
-    taskStatus: 'available',
+    taskStatus: 'AVAILABLE',
     employerId: originalTask.employer_id,
     parentTaskId: originalTaskId, // Link to original task
   };
@@ -325,7 +325,7 @@ export async function updateTask(taskId: string, updates: Partial<DatabaseTask>)
     const now = new Date();
     const hasSlots = slotsRemaining > 0;
     const notExpired = deadline ? deadline > now : true;
-    cleanUpdates.taskStatus = (hasSlots && notExpired) ? 'available' : 'completed';
+    cleanUpdates.taskStatus = (hasSlots && notExpired) ? 'AVAILABLE' : 'COMPLETED';
     console.log(`📊 Task status: slots=${slotsRemaining}, expired=${!notExpired}, status=${cleanUpdates.taskStatus}`);
   }
 
@@ -586,7 +586,7 @@ export async function getLeaderboard(limit: number = 10) {
   const { data, error } = await supabase
     .from('User')
     .select('id, piUsername, totalEarnings, totalTasksCompleted')
-    .eq('userRole', 'worker')
+    .eq('userRole', 'WORKER')
     .order('totalEarnings', { ascending: false })
     .limit(limit);
 

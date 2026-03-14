@@ -57,15 +57,13 @@ export async function POST(request: NextRequest) {
         id: piUid,
         piUid: piUid,
         piUsername: piUsername,
-        userRole: 'worker',
+        userRole: 'WORKER',
         level: 'NEWCOMER',
         currentStreak: 0,
         longestStreak: 0,
         totalEarnings: 0,
         totalTasksCompleted: 0,
-        status: 'ACTIVE',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        lastActiveDate: new Date().toISOString(),
       }])
       .select()
       .maybeSingle();

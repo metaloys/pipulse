@@ -61,7 +61,7 @@ export async function POST(request: Request) {
           slotsRemaining: slotsAvailable,
           deadline: deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days default
           employerId: employerId,
-          taskStatus: 'available',
+          taskStatus: 'AVAILABLE',
           instructions: body.instructions || `Complete this ${category} task. Proof type: ${proofType}`,
           proofType: proofType,
           createdAt: new Date().toISOString(),
