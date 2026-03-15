@@ -15,20 +15,20 @@ datasource db {
 
 model User {
   id                  String          @id @default(cuid())
-  piUid               String          @unique
-  piUsername          String          @unique
-  piWallet            String?         @unique
-  userRole            UserRole        @default(WORKER)
+  piUid               String          @unique @map("pi_uid")
+  piUsername          String          @unique @map("pi_username")
+  piWallet            String?         @unique @map("pi_wallet")
+  userRole            UserRole        @default(WORKER) @map("user_role")
   level               Level           @default(NEWCOMER)
-  currentStreak       Int             @default(0)
-  longestStreak       Int             @default(0)
-  lastActiveDate      DateTime        @default(now())
-  totalEarnings       Decimal         @default(0) @db.Decimal(15,8)
-  totalTasksCompleted Int             @default(0)
+  currentStreak       Int             @default(0) @map("current_streak")
+  longestStreak       Int             @default(0) @map("longest_streak")
+  lastActiveDate      DateTime        @default(now()) @map("last_active_date")
+  totalEarnings       Decimal         @default(0) @db.Decimal(15,8) @map("total_earnings")
+  totalTasksCompleted Int             @default(0) @map("total_tasks_completed")
   status              UserStatus      @default(ACTIVE)
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  deletedAt           DateTime?       // Soft delete
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  deletedAt           DateTime?       @map("deleted_at") // Soft delete
 
   // Relations
   tasks               Task[]
@@ -43,6 +43,7 @@ model User {
   @@index([status])
   @@index([piUsername])
   @@index([piUid])
+  @@map("User")
 }
 
 enum UserRole {
@@ -72,26 +73,27 @@ model Task {
   id              String          @id @default(cuid())
   title           String         
   description     String         
-  category        TaskCategory
+  category        TaskCategory    @map("category")
   instructions    String         
-  proofType       ProofType
-  piReward        Decimal         @db.Decimal(15,8)
-  timeEstimate    Int             // In minutes
-  deadline        DateTime
-  slotsAvailable  Int
-  slotsRemaining  Int
-  taskStatus      TaskStatus      @default(AVAILABLE)
-  employerId      String
+  proofType       ProofType       @map("proof_type")
+  piReward        Decimal         @db.Decimal(15,8) @map("pi_reward")
+  timeEstimate    Int             @map("time_estimate") // In minutes
+  deadline        DateTime        @map("deadline")
+  slotsAvailable  Int             @map("slots_available")
+  slotsRemaining  Int             @map("slots_remaining")
+  status          TaskStatus      @default(AVAILABLE) @map("task_status")
+  employerId      String          @map("employer_id")
   employer        User            @relation(fields: [employerId], references: [id], onDelete: Cascade)
-  parentTaskId    String?         // Tracks if this is a repost of another task
+  parentTaskId    String?         @map("parent_task_id") // Tracks if this is a repost of another task
   parentTask      Task?           @relation("repostLineage", fields: [parentTaskId], references: [id], onDelete: SetNull)
   reposts         Task[]          @relation("repostLineage")
+  expiresAt       DateTime?       @map("expires_at")
   views           Int             @default(0)
-  isFeatured      Boolean         @default(false)
-  featuredUntil   DateTime?
-  deletedAt       DateTime?       // Soft delete
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  isFeatured      Boolean         @default(false) @map("is_featured")
+  featuredUntil   DateTime?       @map("featured_until")
+  deletedAt       DateTime?       @map("deleted_at") // Soft delete
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
 
   // Relations
   submissions     Submission[]
@@ -101,11 +103,12 @@ model Task {
   disputes        Dispute[]
 
   @@index([employerId])
-  @@index([taskStatus])
+  @@index([status])
   @@index([category])
   @@index([deadline])
   @@index([deletedAt])
   @@index([parentTaskId])
+  @@map("Task")
 }
 
 enum TaskStatus {
@@ -176,27 +179,27 @@ model SlotLock {
 
 model Submission {
   id                String          @id @default(cuid())
-  taskId            String
+  taskId            String          @map("task_id")
   task              Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  workerId          String
+  workerId          String          @map("worker_id")
   worker            User            @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  proofContent      String         
-  submissionType    ProofType
+  proofContent      String          @map("proof_content")
+  submissionType    ProofType       @map("submission_type")
   status            SubmissionStatus @default(SUBMITTED)
-  agreedReward      Decimal         @db.Decimal(15,8)
-  rejectionReason   String?        
-  revisionNumber    Int             @default(0)
-  revisionReason    String?        
-  revisionRequestedAt DateTime?
-  resubmittedAt     DateTime?
-  adminNotes        String?        
-  acceptedAt        DateTime?       // When worker accepted task and slot lock started
-  submittedAt       DateTime        @default(now())
-  reviewedAt        DateTime?
-  autoApproved      Boolean         @default(false)
-  deletedAt         DateTime?       // Soft delete
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  agreedReward      Decimal         @db.Decimal(15,8) @map("agreed_reward")
+  rejectionReason   String?         @map("rejection_reason")
+  revisionNumber    Int             @default(0) @map("revision_number")
+  revisionReason    String?         @map("revision_reason")
+  revisionRequestedAt DateTime?     @map("revision_requested_at")
+  resubmittedAt     DateTime?       @map("resubmitted_at")
+  adminNotes        String?         @map("admin_notes")
+  acceptedAt        DateTime?       @map("accepted_at") // When worker accepted task and slot lock started
+  submittedAt       DateTime        @default(now()) @map("submitted_at")
+  reviewedAt        DateTime?       @map("reviewed_at")
+  autoApproved      Boolean         @default(false) @map("auto_approved")
+  deletedAt         DateTime?       @map("deleted_at") // Soft delete
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
 
   // Relations
   dispute           Dispute?
@@ -207,6 +210,7 @@ model Submission {
   @@index([status])
   @@index([deletedAt])
   @@unique([taskId, workerId])
+  @@map("Submission")
 }
 
 enum SubmissionStatus {
@@ -224,23 +228,23 @@ enum SubmissionStatus {
 
 model Transaction {
   id              String          @id @default(cuid())
-  senderId        String?
+  senderId        String?         @map("sender_id")
   sender          User?           @relation("sender", fields: [senderId], references: [id], onDelete: SetNull)
-  receiverId      String?
+  receiverId      String?         @map("receiver_id")
   receiver        User?           @relation("receiver", fields: [receiverId], references: [id], onDelete: SetNull)
   amount          Decimal         @db.Decimal(15,8)
-  pipulseFee      Decimal         @db.Decimal(5,2)
-  taskId          String?
+  pipulseFee      Decimal         @db.Decimal(5,2) @map("pipulse_fee")
+  taskId          String?         @map("task_id")
   task            Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  submissionId    String?         @unique
+  submissionId    String?         @unique @map("submission_id")
   submission      Submission?     @relation(fields: [submissionId], references: [id], onDelete: SetNull)
   type            TransactionType
   status          TransactionStatus
-  piBlockchainTxId String?
-  failedAt        DateTime?
+  piBlockchainTxId String?        @map("pi_blockchain_txid")
+  failedAt        DateTime?       @map("failed_at")
   timestamp       DateTime        @default(now())
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
 
   @@index([senderId])
   @@index([receiverId])
@@ -248,6 +252,7 @@ model Transaction {
   @@index([submissionId])
   @@index([status])
   @@index([type])
+  @@map("Transaction")
 }
 
 enum TransactionType {

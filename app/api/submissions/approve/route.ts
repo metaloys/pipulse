@@ -1,39 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-function getSupabaseClient() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !key) {
-    throw new Error('Missing Supabase configuration');
-  }
-
-  return createClient(url, key);
-}
+import { prisma } from '@/lib/db';
+import { ApproveSubmissionSchema, validateRequest } from '@/lib/validators';
 
 export async function POST(request: NextRequest) {
   try {
-    const { submissionId, workerId, agreedReward } = await request.json();
+    const body = await request.json();
 
-    if (!submissionId || !workerId || agreedReward === undefined) {
-      return NextResponse.json(
-        { error: 'Missing required fields: submissionId, workerId, agreedReward' },
-        { status: 400 }
-      );
+    console.log('📥 Approval request:', { submissionId: body.submissionId, workerId: body.workerId });
+
+    // Validate input
+    const validation = validateRequest(ApproveSubmissionSchema, body);
+    if (!validation.success) {
+      console.error('❌ Validation error:', validation.error);
+      return NextResponse.json({ error: 'Invalid input: ' + validation.error }, { status: 400 });
     }
 
-    const supabase = getSupabaseClient();
-    const now = new Date().toISOString();
+    const { submissionId, workerId, agreedReward } = validation.data;
 
     // 1. Get submission and verify it exists and is SUBMITTED
-    const { data: submissionData, error: submissionError } = await supabase
-      .from('Submission')
-      .select('*')
-      .eq('id', submissionId)
-      .single();
+    console.log('🔍 Fetching submission:', submissionId);
+    const submission = await prisma.submission.findUnique({
+      where: { id: submissionId },
+    });
 
-    if (submissionError || !submissionData || submissionData.status !== 'SUBMITTED') {
+    if (!submission || submission.status !== 'SUBMITTED') {
+      console.error('❌ Invalid submission or already processed:', submissionId);
       return NextResponse.json(
         { error: 'Invalid submission or already processed' },
         { status: 400 }
@@ -41,13 +32,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Get worker to verify they exist
-    const { data: workerData, error: workerError } = await supabase
-      .from('User')
-      .select('id, piUid, piUsername, totalEarnings, totalTasksCompleted')
-      .eq('id', workerId)
-      .single();
+    console.log('🔍 Fetching worker:', workerId);
+    const worker = await prisma.user.findUnique({
+      where: { id: workerId },
+    });
 
-    if (workerError || !workerData) {
+    if (!worker) {
+      console.error('❌ Worker not found:', workerId);
       return NextResponse.json(
         { error: 'Worker not found' },
         { status: 404 }
@@ -58,15 +49,16 @@ export async function POST(request: NextRequest) {
     const platformFee = parseFloat((agreedReward * 0.05).toFixed(4));
     const workerPayout = parseFloat((agreedReward - platformFee).toFixed(4));
 
-    console.log(`💰 Releasing payment: ${agreedReward}π total, ${workerPayout}π to worker, ${platformFee}π fee`);
+    console.log(`💰 Payment breakdown: ${agreedReward}π total, ${workerPayout}π to worker, ${platformFee}π fee`);
 
     // 4. Call Pi API to send real Pi to worker
-    let piResponse = null;
-    let piData = null;
     let piPaymentSuccessful = false;
+    let piPaymentId = null;
+    let piBlockchainTxId = null;
 
     try {
-      piResponse = await fetch('https://api.minepi.com/v2/payments', {
+      console.log('📤 Calling Pi API for worker payout...');
+      const piResponse = await fetch('https://api.minepi.com/v2/payments', {
         method: 'POST',
         headers: {
           'Authorization': `Key ${process.env.PI_API_KEY}`,
@@ -80,64 +72,74 @@ export async function POST(request: NextRequest) {
             workerId: workerId,
             type: 'worker_payout',
           },
-          uid: workerData.piUid,
+          uid: worker.piUid,
           payment_type: 'developer_to_user',
         }),
       });
 
-      piData = await piResponse.json();
+      const piData = await piResponse.json();
       piPaymentSuccessful = piResponse.ok;
-      console.log('Pi API response:', piData);
+      piPaymentId = piData?.identifier;
+      piBlockchainTxId = piData?.transaction?.txid;
+
+      console.log('Pi API response:', {
+        ok: piResponse.ok,
+        identifier: piPaymentId,
+        txid: piBlockchainTxId,
+      });
 
       if (!piResponse.ok) {
-        console.error('Pi API error:', piData);
+        console.error('❌ Pi API error:', piData);
       }
     } catch (piError) {
-      console.error('Pi API call failed:', piError);
+      console.error('❌ Pi API call failed:', piError);
       // Continue with database update even if Pi API fails
       // so we can retry payment manually later
     }
 
-    // 5. Update submission to APPROVED
-    await supabase
-      .from('Submission')
-      .update({
+    // 5. Update submission to APPROVED using Prisma
+    console.log('✏️ Updating submission status to APPROVED...');
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: {
         status: 'APPROVED',
-        reviewedAt: now,
-        updatedAt: now,
-      })
-      .eq('id', submissionId);
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
 
-    // 6. Update worker earnings and task count in User table
-    const newTotalEarnings = (workerData.totalEarnings || 0) + workerPayout;
-    const newTasksCompleted = (workerData.totalTasksCompleted || 0) + 1;
+    // 6. Update worker earnings and task count using Prisma
+    console.log('✏️ Updating worker earnings and task count...');
+    const newTotalEarnings = (worker.totalEarnings || 0) + workerPayout;
+    const newTasksCompleted = (worker.totalTasksCompleted || 0) + 1;
 
-    await supabase
-      .from('User')
-      .update({
+    const updatedWorker = await prisma.user.update({
+      where: { id: workerId },
+      data: {
         totalEarnings: newTotalEarnings,
         totalTasksCompleted: newTasksCompleted,
-        updatedAt: now,
-      })
-      .eq('id', workerId);
+        updatedAt: new Date(),
+      },
+    });
 
-    // 7. Create Transaction record with Pi payment details
-    await supabase
-      .from('Transaction')
-      .insert({
+    // 7. Create Transaction record using Prisma
+    console.log('➕ Creating transaction record...');
+    const transaction = await prisma.transaction.create({
+      data: {
         senderId: 'pipulse_escrow',
         receiverId: workerId,
         amount: workerPayout,
         pipulseFee: platformFee,
         submissionId: submissionId,
-        type: 'payment',
-        status: piPaymentSuccessful ? 'completed' : 'pending',
-        piBlockchainTxId: piData?.transaction?.txid || null,
-        timestamp: now,
-      });
+        type: 'PAYMENT',
+        status: piPaymentSuccessful ? 'COMPLETED' : 'PENDING',
+        piBlockchainTxId: piBlockchainTxId,
+        timestamp: new Date(),
+      },
+    });
 
     console.log(
-      `✅ Payment released: ${workerPayout}π to worker ${workerData.piUsername}`,
+      `✅ Payment released: ${workerPayout}π to worker ${worker.piUsername}`,
       piPaymentSuccessful ? '(Pi blockchain confirmed)' : '(pending Pi API confirmation)'
     );
 
@@ -146,17 +148,17 @@ export async function POST(request: NextRequest) {
         success: true,
         workerPayout,
         platformFee,
-        piPaymentId: piData?.identifier,
-        piBlockchainTxId: piData?.transaction?.txid,
+        piPaymentId,
+        piBlockchainTxId,
         newTotalEarnings,
         newTasksCompleted,
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error('Submission approval error:', error);
+    console.error('❌ Submission approval error:', error);
     return NextResponse.json(
-      { error: 'Failed to approve submission', details: String(error) },
+      { error: 'Failed to approve submission', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

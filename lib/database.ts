@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { prisma } from './db';
 import type { DatabaseTask, DatabaseUser, DatabaseTaskSubmission, DatabaseTransaction, DatabaseStreak, DatabaseDispute } from './types';
 
 // ============ USERS ============
@@ -18,17 +19,15 @@ export async function getUserByUsername(username: string) {
 }
 
 export async function getUserById(userId: string) {
-  const { data, error } = await supabase
-    .from('User')
-    .select('*')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (error) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+    return user as DatabaseUser | null;
+  } catch (error) {
     console.error('Error fetching user:', error);
     return null;
   }
-  return data as DatabaseUser | null;
 }
 
 export async function createUser(user: Omit<DatabaseUser, 'id' | 'created_at' | 'updated_at'>) {
@@ -156,53 +155,56 @@ export async function updateUser(userId: string, updates: Partial<DatabaseUser>)
  * Uses direct UPDATE to avoid query issues
  */
 export async function switchUserRole(userId: string, newRole: 'worker' | 'employer') {
-  console.log(`🔄 Switching role for user ${userId} to ${newRole}...`);
-  
-  const { data, error } = await supabase
-    .from('User')
-    .update({ 
-      userRole: newRole,
-      updatedAt: new Date().toISOString()
-    })
-    .eq('id', userId)
-    .select()
-    .maybeSingle();
+  try {
+    console.log(`🔄 Switching role for user ${userId} to ${newRole}...`);
+    
+    // Normalize role to uppercase for database storage
+    const normalizedRole = newRole.toUpperCase() as 'WORKER' | 'EMPLOYER';
+    
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        userRole: normalizedRole,
+        updatedAt: new Date(),
+      },
+    });
 
-  if (error) {
+    console.log(`✅ Role switched successfully to ${newRole}:`, user.userRole);
+    return user as DatabaseUser;
+  } catch (error) {
     console.error(`❌ Error switching role for ${userId}:`, error);
     return null;
   }
-
-  if (data) {
-    console.log(`✅ Role switched successfully to ${newRole}:`, data.userRole);
-    return data as DatabaseUser;
-  }
-
-  return null;
 }
 
 // ============ TASKS ============
 
 export async function getAllTasks() {
-  const { data, error } = await supabase
-    .from('Task')
-    .select(`
-      *,
-      employer:User!employerId(
-        id,
-        piUsername
-      )
-    `)
-    .eq('taskStatus', 'AVAILABLE')
-    .is('deletedAt', null)  // Exclude soft-deleted tasks
-    .gt('slotsRemaining', 0)  // Only show tasks with available slots
-    .order('createdAt', { ascending: false });
+  try {
+    const tasks = await prisma.task.findMany({
+      where: {
+        status: 'AVAILABLE',
+        deletedAt: null,
+        slotsRemaining: { gt: 0 },
+      },
+      include: {
+        employer: {
+          select: {
+            id: true,
+            piUsername: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
 
-  if (error) {
+    return tasks as any as DatabaseTask[];
+  } catch (error) {
     console.error('Error fetching tasks:', error);
     return [];
   }
-  return data as DatabaseTask[];
 }
 
 export async function getTasksByCategory(category: string) {
@@ -586,18 +588,28 @@ export async function updateStreak(userId: string, updates: Partial<DatabaseStre
 // ============ LEADERBOARD ============
 
 export async function getLeaderboard(limit: number = 10) {
-  const { data, error } = await supabase
-    .from('User')
-    .select('id, piUsername, totalEarnings, totalTasksCompleted')
-    .eq('userRole', 'WORKER')
-    .order('totalEarnings', { ascending: false })
-    .limit(limit);
+  try {
+    const leaderboard = await prisma.user.findMany({
+      where: {
+        userRole: 'WORKER',
+      },
+      select: {
+        id: true,
+        piUsername: true,
+        totalEarnings: true,
+        totalTasksCompleted: true,
+      },
+      orderBy: {
+        totalEarnings: 'desc',
+      },
+      take: limit,
+    });
 
-  if (error) {
+    return leaderboard;
+  } catch (error) {
     console.error('Error fetching leaderboard:', error);
     return [];
   }
-  return data;
 }
 
 // ============ STATS ============
@@ -1100,45 +1112,32 @@ export async function submitTaskSubmission(input: {
     const revisionNumber = input.revisionNumber || 1;
 
     // First, fetch the task to get its piReward (locks price at submission time)
-    const { data: taskData, error: taskError } = await supabase
-      .from('Task')
-      .select('piReward')
-      .eq('id', input.taskId)
-      .single();
+    const task = await prisma.task.findUnique({
+      where: { id: input.taskId },
+      select: { piReward: true },
+    });
 
-    if (taskError || !taskData) {
-      console.error('Error fetching task for reward amount:', taskError);
+    if (!task) {
+      console.error('Error fetching task for reward amount');
       throw new Error('Could not find task or its reward amount');
     }
 
-    const { data, error } = await supabase
-      .from('Submission')
-      .insert({
+    // Create submission using Prisma
+    const submission = await prisma.submission.create({
+      data: {
         taskId: input.taskId,
         workerId: input.workerId,
         proofContent: input.proofContent,
-        submissionType: input.submissionType,
+        submissionType: input.submissionType.toUpperCase() as 'TEXT' | 'PHOTO' | 'AUDIO' | 'FILE',
         status: revisionNumber > 1 ? 'REVISION_RESUBMITTED' : 'SUBMITTED',
-        agreedReward: taskData.piReward, // Lock the price at submission time
+        agreedReward: task.piReward,
         revisionNumber: revisionNumber,
-        resubmittedAt: revisionNumber > 1 ? new Date().toISOString() : null,
-        submittedAt: new Date().toISOString(),
-      })
-      .select()
-      .single();
+        resubmittedAt: revisionNumber > 1 ? new Date() : null,
+        submittedAt: new Date(),
+      },
+    });
 
-    if (error) throw error;
-
-    // Remove task revision lock if resubmitting
-    if (revisionNumber > 1) {
-      await supabase
-        .from('task_revision_locks')
-        .delete()
-        .eq('taskId', input.taskId)
-        .eq('workerId', input.workerId);
-    }
-
-    return data as DatabaseTaskSubmission;
+    return submission as DatabaseTaskSubmission;
   } catch (error) {
     console.error('Error submitting task:', error);
     return null;

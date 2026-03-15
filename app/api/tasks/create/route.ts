@@ -1,106 +1,107 @@
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { validateRequest } from '@/lib/validators';
+import { z } from 'zod';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export async function POST(request: Request) {
+/**
+ * Create a new task with Prisma
+ * POST /api/tasks/create
+ */
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    console.log('📝 Task creation request:', { 
+      title: body.title, 
+      category: body.category, 
+      piReward: body.piReward, 
+      slotsAvailable: body.slotsAvailable, 
+      employerId: body.employerId 
+    });
+
+    // Validate input with flexible schema
+    const schema = z.object({
+      title: z.string().min(3, 'Title required').max(200),
+      description: z.string().min(10, 'Description required').max(2000),
+      category: z.string().refine(cat => ['app-testing', 'survey', 'translation', 'audio-recording', 'photo-capture', 'content-review', 'data-labeling'].includes(cat), 'Invalid category'),
+      piReward: z.number().min(0.01, 'Minimum 0.01π').max(1000),
+      slotsAvailable: z.number().min(1, 'Min 1 slot').max(100, 'Max 100 slots'),
+      employerId: z.string().uuid('Invalid employer ID'),
+      deadline: z.string().optional(),
+      estimatedDuration: z.number().min(1).max(1440).optional(),
+    });
+
+    const validation = validateRequest(schema, body);
+    if (!validation.success) {
+      console.error('❌ Validation error:', validation.error);
+      return NextResponse.json({ error: 'Invalid input: ' + validation.error }, { status: 400 });
+    }
 
     const {
       title,
       description,
       category,
-      proofType,
       piReward,
       slotsAvailable,
-      deadline,
       employerId,
-    } = body;
+      deadline,
+      estimatedDuration,
+    } = validation.data;
 
-    console.log('📝 Task creation request:', { title, category, piReward, slotsAvailable, employerId });
+    // Verify employer exists and has EMPLOYER role
+    const employer = await prisma.user.findUnique({
+      where: { id: employerId },
+    });
 
-    // Validate required fields
-    if (!title?.trim()) {
-      return Response.json({ error: 'Title is required' }, { status: 400 });
-    }
-    if (!description?.trim()) {
-      return Response.json({ error: 'Description is required' }, { status: 400 });
-    }
-    if (!category) {
-      return Response.json({ error: 'Category is required' }, { status: 400 });
-    }
-    if (!proofType) {
-      return Response.json({ error: 'Proof type is required' }, { status: 400 });
-    }
-    if (!piReward || piReward < 0.01) {
-      return Response.json({ error: 'Pi reward must be at least 0.01π' }, { status: 400 });
-    }
-    if (!slotsAvailable || slotsAvailable < 1 || slotsAvailable > 100) {
-      return Response.json(
-        { error: 'Slots must be between 1 and 100' },
-        { status: 400 }
-      );
-    }
-    if (!employerId) {
-      return Response.json({ error: 'Employer ID is required' }, { status: 400 });
+    if (!employer) {
+      console.error('❌ Employer not found:', employerId);
+      return NextResponse.json({ error: 'Employer not found' }, { status: 404 });
     }
 
-    // Create task in database
-    const taskData = {
-      title: title.trim(),
-      description: description.trim(),
-      category: category.toLowerCase(),
-      piReward: piReward,
-      timeEstimate: 60, // Default 60 minutes
-      slotsAvailable: slotsAvailable,
-      slotsRemaining: slotsAvailable,
-      deadline: deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      employerId: employerId,
-      taskStatus: 'AVAILABLE',
-      instructions: body.instructions || `Complete this ${category} task. Proof type: ${proofType}`,
-      proofType: proofType,
-    };
-
-    console.log('🔍 Task data to insert:', taskData);
-
-    const { data, error } = await supabase
-      .from('Task')
-      .insert([taskData])
-      .select()
-      .maybeSingle();
-
-    if (error) {
-      console.error('❌ Error creating task:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-      });
-      return Response.json(
-        { error: 'Failed to create task', details: error.message, code: error.code },
-        { status: 500 }
-      );
+    if (employer.userRole !== 'EMPLOYER') {
+      console.error('❌ User is not an employer:', employerId);
+      return NextResponse.json({ error: 'User must have EMPLOYER role to create tasks' }, { status: 403 });
     }
 
-    console.log('✅ Task created successfully:', data?.id);
-    return Response.json(
+    // Create task using Prisma
+    console.log('➕ Creating task with Prisma...');
+    const task = await prisma.task.create({
+      data: {
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        piReward,
+        slotsAvailable,
+        slotsRemaining: slotsAvailable,
+        estimatedDuration: estimatedDuration || 60,
+        expiresAt: deadline ? new Date(deadline) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        status: 'AVAILABLE',
+        employerId,
+        createdAt: new Date(),
+      },
+    });
+
+    console.log('✅ Task created successfully:', {
+      id: task.id,
+      title: task.title,
+      employerId: task.employerId,
+      piReward: task.piReward,
+    });
+
+    return NextResponse.json(
       {
         success: true,
         message: 'Task created successfully',
-        task: data,
+        task,
       },
       { status: 201 }
     );
   } catch (err) {
-    console.error('❌ Task create error:', JSON.stringify({
+    console.error('❌ Task create error:', {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
-      error: err,
-    }, null, 2));
-    return Response.json(
+    });
+    return NextResponse.json(
       {
         error: 'Internal server error',
         details: err instanceof Error ? err.message : String(err),

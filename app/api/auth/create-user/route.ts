@@ -1,100 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { prisma } from '@/lib/db';
+import { CreateUserSchema, validateRequest } from '@/lib/validators';
 
 export async function POST(request: NextRequest) {
   try {
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    console.log('📋 Env vars check:', {
-      url: url ? `✅ ${url.substring(0, 30)}...` : '❌ Missing',
-      key: key ? `✅ Present (${key.length} chars)` : '❌ Missing',
-    });
-
-    if (!url || !key) {
-      console.error('❌ Missing env vars:', { url: !!url, key: !!key });
-      return NextResponse.json({ error: 'Missing env vars', details: { url: !!url, key: !!key } }, { status: 500 });
-    }
-
-    console.log('🔧 Creating Supabase client with URL:', url);
-    const supabase = createClient(url, key);
-    
     const body = await request.json();
-    const { piUid, piUsername } = body;
+    
+    console.log('📥 Request body:', body);
 
-    console.log('📥 Request body:', { piUid, piUsername });
-
-    if (!piUid || !piUsername) {
-      console.error('❌ Missing fields:', { piUid, piUsername });
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+    // Validate input using Zod
+    const validation = validateRequest(CreateUserSchema, body);
+    if (!validation.success) {
+      console.error('❌ Validation error:', validation.error);
+      return NextResponse.json({ error: 'Invalid input: ' + validation.error }, { status: 400 });
     }
 
-    console.log('🔍 Checking for existing user:', { piUid, piUsername });
+    const { piUid, piUsername } = validation.data;
+    console.log('📝 Validated input:', { piUid, piUsername });
 
-    // Check if user exists by piUid first
-    const { data: existingByUid, error: checkError } = await supabase
-      .from('User')
-      .select('*')
-      .eq('piUid', piUid)
-      .maybeSingle();
-
-    if (checkError) {
-      console.error('⚠️  Error checking existing user:', {
-        message: checkError.message,
-        code: checkError.code,
-        details: checkError.details,
-      });
-    }
+    // Check if user exists by piUid first (CRITICAL - piUid is immutable, piUsername can change)
+    console.log('🔍 Checking for existing user with piUid:', piUid);
+    const existingByUid = await prisma.user.findUnique({
+      where: { piUid },
+    });
 
     if (existingByUid) {
       console.log('✅ User already exists by piUid:', piUid);
       return NextResponse.json({ user: existingByUid }, { status: 200 });
     }
 
-    // Check by piUsername as fallback
-    const { data: existingByUsername } = await supabase
-      .from('User')
-      .select('*')
-      .eq('piUsername', piUsername)
-      .maybeSingle();
+    // Fallback check by piUsername (in case piUid lookup fails for legacy users)
+    console.log('🔍 Checking for existing user with piUsername fallback:', piUsername);
+    const existingByUsername = await prisma.user.findFirst({
+      where: { piUsername },
+    });
 
     if (existingByUsername) {
       console.log('✅ User already exists by piUsername:', piUsername);
       return NextResponse.json({ user: existingByUsername }, { status: 200 });
     }
 
-    console.log('➕ Creating new user:', { piUid, piUsername });
-
-    const { data: newUser, error: insertError } = await supabase
-      .from('User')
-      .insert([{
-        piUid: piUid,
-        piUsername: piUsername,
+    // Create new user with initial data
+    console.log('➕ Creating new user with Prisma:', { piUid, piUsername });
+    const newUser = await prisma.user.create({
+      data: {
+        piUid,
+        piUsername,
         userRole: 'WORKER',
         level: 'NEWCOMER',
         status: 'ACTIVE',
-      }])
-      .select()
-      .maybeSingle();
+        totalEarnings: 0,
+        totalTasksCompleted: 0,
+        currentStreak: 0,
+      },
+    });
 
-    if (insertError) {
-      console.error('❌ Insert error:', {
-        message: insertError.message,
-        code: insertError.code,
-        details: insertError.details,
-        hint: insertError.hint,
-      });
-      return NextResponse.json(
-        { 
-          error: insertError.message, 
-          code: insertError.code,
-          details: insertError.details,
-        },
-        { status: 500 }
-      );
-    }
+    console.log('✅ User created successfully:', {
+      id: newUser.id,
+      piUsername: newUser.piUsername,
+      userRole: newUser.userRole,
+      createdAt: newUser.createdAt,
+    });
 
-    console.log('✅ User created successfully:', newUser?.id);
     return NextResponse.json({ user: newUser }, { status: 200 });
 
   } catch (error) {
