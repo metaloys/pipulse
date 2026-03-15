@@ -1,0 +1,5 @@
+Testing migration at: February 25, 2026
+DATABASE_URL updated with session pooler from Supabase
+Ready to run: npx prisma migrate dev --name init_schema
+Password: bn03gDQFuGqhHyFF
+Host: aws-1-eu-west-1.pooler.supabase.com

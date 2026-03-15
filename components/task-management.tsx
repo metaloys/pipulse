@@ -9,10 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { updateTask, deleteTask } from '@/lib/database';
+import { updateTask, deleteTask, repostTask } from '@/lib/database';
 import { CreateTaskModal } from '@/components/create-task-modal';
 import type { DatabaseTask, TaskCategory } from '@/lib/types';
-import { Edit2, Trash2, Eye, AlertCircle, Plus, Clock } from 'lucide-react';
+import { Edit2, Trash2, Eye, AlertCircle, Plus, Clock, Copy } from 'lucide-react';
 
 interface TaskManagementProps {
   tasks: DatabaseTask[];
@@ -23,18 +23,13 @@ interface TaskManagementProps {
 }
 
 const CATEGORIES: TaskCategory[] = [
-  'data-entry',
-  'photo-capture',
-  'video-recording',
-  'writing',
-  'review',
+  'app-testing',
+  'survey',
   'translation',
-  'research',
-  'design',
-  'marketing',
-  'development',
-  'testing',
-  'other',
+  'audio-recording',
+  'photo-capture',
+  'content-review',
+  'data-labeling',
 ];
 
 // Calculate time remaining until deadline
@@ -98,6 +93,13 @@ export function TaskManagement({
   const [viewingTask, setViewingTask] = useState<DatabaseTask | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<{ [key: string]: ReturnType<typeof calculateTimeRemaining> }>({});
+  const [taskToRepost, setTaskToRepost] = useState<DatabaseTask | null>(null);
+  const [isRepostModalOpen, setIsRepostModalOpen] = useState(false);
+  const [repostFormData, setRepostFormData] = useState({
+    deadline: '',
+    slots_available: 1,
+    pi_reward: 0,
+  });
 
   // Form state for editing
   const [formData, setFormData] = useState({
@@ -248,6 +250,69 @@ export function TaskManagement({
     }
   };
 
+  const handleRepostTask = (task: DatabaseTask) => {
+    setTaskToRepost(task);
+    
+    // Set default values for the repost
+    const defaultDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const formattedDeadline = defaultDeadline.toISOString().slice(0, 16);
+    
+    setRepostFormData({
+      deadline: formattedDeadline,
+      slots_available: task.slots_available,
+      pi_reward: task.pi_reward,
+    });
+    setIsRepostModalOpen(true);
+    setError(null);
+  };
+
+  const handleConfirmRepost = async () => {
+    try {
+      if (!taskToRepost) return;
+
+      // Validate form
+      if (!repostFormData.deadline) {
+        setError('Deadline is required');
+        return;
+      }
+      if (repostFormData.slots_available <= 0) {
+        setError('Slots available must be positive');
+        return;
+      }
+      if (repostFormData.pi_reward <= 0) {
+        setError('Task reward must be positive');
+        return;
+      }
+      if (new Date(repostFormData.deadline) <= new Date()) {
+        setError('Deadline must be in the future');
+        return;
+      }
+
+      setIsSubmitting(true);
+      setError(null);
+
+      const newTask = await repostTask(taskToRepost.id, {
+        deadline: repostFormData.deadline,
+        slots_available: repostFormData.slots_available,
+        pi_reward: repostFormData.pi_reward,
+      });
+
+      if (!newTask) {
+        throw new Error('Failed to repost task');
+      }
+
+      console.log(`♻️ Task reposted successfully: ${taskToRepost.id} → ${newTask.id}`);
+      setIsRepostModalOpen(false);
+      setTaskToRepost(null);
+      onTasksUpdated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to repost task');
+      console.error('Error reposting task:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <>
       {/* Create Task Modal Trigger (renders its own button) */}
@@ -357,6 +422,15 @@ export function TaskManagement({
                       }
                     >
                       <Trash2 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleRepostTask(task)}
+                      className="hover:bg-amber-500/20"
+                      title="Repost this task with new deadline and slots"
+                    >
+                      <Copy className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
@@ -618,6 +692,103 @@ export function TaskManagement({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Repost Task Modal */}
+      <Dialog open={isRepostModalOpen} onOpenChange={setIsRepostModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Repost Task</DialogTitle>
+            <DialogDescription>
+              Create a new task based on "{taskToRepost?.title}" with updated terms
+            </DialogDescription>
+          </DialogHeader>
+
+          {error && (
+            <div className="flex gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/50">
+              <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
+          )}
+
+          {taskToRepost && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Original task:</p>
+                <p className="text-sm font-semibold text-foreground">{taskToRepost.title}</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="repost-deadline" className="text-foreground">
+                    Deadline
+                  </Label>
+                  <Input
+                    id="repost-deadline"
+                    type="datetime-local"
+                    value={repostFormData.deadline}
+                    onChange={(e) =>
+                      setRepostFormData(prev => ({ ...prev, deadline: e.target.value }))
+                    }
+                    className="bg-white/5 border-white/10 mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="repost-slots" className="text-foreground">
+                    Available Slots
+                  </Label>
+                  <Input
+                    id="repost-slots"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={repostFormData.slots_available}
+                    onChange={(e) =>
+                      setRepostFormData(prev => ({ ...prev, slots_available: parseInt(e.target.value, 10) }))
+                    }
+                    className="bg-white/5 border-white/10 mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="repost-reward" className="text-foreground">
+                    Reward (π)
+                  </Label>
+                  <Input
+                    id="repost-reward"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={repostFormData.pi_reward}
+                    onChange={(e) =>
+                      setRepostFormData(prev => ({ ...prev, pi_reward: parseFloat(e.target.value) }))
+                    }
+                    className="bg-white/5 border-white/10 mt-1"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2 justify-end pt-4 border-t border-white/10">
+            <Button
+              variant="ghost"
+              onClick={() => setIsRepostModalOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmRepost}
+              disabled={isSubmitting}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {isSubmitting ? 'Creating...' : 'Repost Task'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
+

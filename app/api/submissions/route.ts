@@ -20,6 +20,8 @@ import {
   getWorkerSubmissionStats,
 } from '@/lib/database';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/submissions/submit
  * Submit a new task submission or revision
@@ -72,33 +74,49 @@ export async function POST(req: NextRequest) {
 
     // Approve endpoint
     if (pathname.includes('/approve')) {
-      const { submissionId, taskId, taskReward, employerNotes } = body;
+      const { submissionId, taskId, workerId, piReward, taskReward, employerNotes } = body;
+      const reward = piReward || taskReward;
 
-      if (!submissionId || !taskId || !taskReward) {
+      console.log('🔄 Approve endpoint received:', { submissionId, taskId, workerId, reward, body });
+
+      if (!submissionId || !taskId || !workerId) {
+        const errorMsg = `Missing required fields: submissionId=${submissionId}, taskId=${taskId}, workerId=${workerId}`;
+        console.error('❌ ' + errorMsg);
         return NextResponse.json(
-          { error: 'Missing required fields' },
+          { error: errorMsg },
           { status: 400 }
         );
       }
 
-      // Verify user is the employer
-      // TODO: Add employer verification
+      if (!reward || reward <= 0) {
+        const errorMsg = `Invalid reward amount: piReward=${piReward}, taskReward=${taskReward}, resolved=${reward}`;
+        console.error('❌ ' + errorMsg);
+        return NextResponse.json(
+          { error: errorMsg },
+          { status: 400 }
+        );
+      }
+
+      console.log('✅ All fields valid, calling approveTaskSubmission');
 
       const success = await approveTaskSubmission({
         submissionId,
         taskId,
-        workerId: body.workerId, // From request body
-        taskReward,
+        workerId,
+        taskReward: reward,
         employerNotes,
       });
 
       if (!success) {
+        const errorMsg = 'Database operation failed during approval';
+        console.error('❌ ' + errorMsg);
         return NextResponse.json(
-          { error: 'Failed to approve submission' },
+          { error: errorMsg },
           { status: 500 }
         );
       }
 
+      console.log('✅ Submission approval complete');
       return NextResponse.json({
         message: 'Submission approved and payment processed',
       });
@@ -196,6 +214,84 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const employerId = searchParams.get('employerId');
+
+    // Employer gets all submissions for their tasks
+    if (employerId) {
+      try {
+        // Import the database function to get submissions for employer
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        // Get all tasks for this employer
+        const { data: tasks, error: tasksError } = await supabase
+          .from('Task')
+          .select('id')
+          .eq('employerId', employerId);
+
+        if (tasksError) {
+          console.error('Error fetching employer tasks:', tasksError);
+          return NextResponse.json(
+            { error: 'Failed to fetch tasks' },
+            { status: 500 }
+          );
+        }
+
+        const taskIds = tasks?.map(t => t.id) || [];
+
+        if (taskIds.length === 0) {
+          return NextResponse.json({ submissions: [] });
+        }
+
+        // Get all submissions for these tasks with worker details
+        const { data: submissions, error: submissionsError } = await supabase
+          .from('Submission')
+          .select(`
+            id,
+            taskId,
+            workerId,
+            proofContent,
+            submissionType,
+            status,
+            agreedReward,
+            rejectionReason,
+            revisionNumber,
+            revisionReason,
+            revisionRequestedAt,
+            resubmittedAt,
+            adminNotes,
+            submittedAt,
+            reviewedAt,
+            createdAt,
+            updatedAt,
+            User:workerId (
+              id,
+              piUsername
+            )
+          `)
+          .in('taskId', taskIds)
+          .order('submittedAt', { ascending: false });
+
+        if (submissionsError) {
+          console.error('Error fetching submissions:', submissionsError);
+          return NextResponse.json(
+            { error: 'Failed to fetch submissions' },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({ submissions: submissions || [] });
+      } catch (err) {
+        console.error('Error in employer submissions endpoint:', err);
+        return NextResponse.json(
+          { error: 'Internal server error' },
+          { status: 500 }
+        );
+      }
+    }
 
     // Worker submissions history endpoint
     if (pathname.includes('/worker')) {
@@ -203,11 +299,7 @@ export async function GET(req: NextRequest) {
       const limit = parseInt(searchParams.get('limit') || '50');
       const offset = parseInt(searchParams.get('offset') || '0');
 
-      const submissions = await getWorkerSubmissions(userId, {
-        status: status || undefined,
-        limit,
-        offset,
-      });
+      const submissions = await getWorkerSubmissions(userId);
 
       return NextResponse.json({ submissions });
     }

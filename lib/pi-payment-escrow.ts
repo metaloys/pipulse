@@ -138,6 +138,7 @@ export async function releasePaymentToWorker(
     const metadata: EscrowPaymentMetadata = {
       type: 'escrow_release',
       task_id: taskId,
+      employer_id: taskId, // Using taskId as placeholder since we don't have employer_id in this context
       worker_id: workerId,
       amount: workerPayment,
       fee: pipulseFee,

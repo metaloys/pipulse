@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseClient();
 
     const { data: tasks, error } = await supabase
-      .from('tasks')
+      .from('Task')
       .select(`
         id,
         title,

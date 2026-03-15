@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     // Delete the task
     const { error } = await supabase
-      .from('tasks')
+      .from('Task')
       .delete()
       .eq('id', taskId);
 

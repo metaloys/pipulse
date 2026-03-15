@@ -21,7 +21,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus } from 'lucide-react';
-import { createTask } from '@/lib/database';
 import type { TaskCategory } from '@/lib/types';
 
 interface CreateTaskModalProps {
@@ -43,6 +42,7 @@ export function CreateTaskModal({
     title: '',
     description: '',
     category: 'app-testing' as TaskCategory,
+    proofType: 'TEXT' as 'TEXT' | 'PHOTO' | 'AUDIO' | 'FILE',
     piReward: '',
     slots: '',
     deadline: '',
@@ -76,21 +76,29 @@ export function CreateTaskModal({
     }));
   };
 
+  const handleProofTypeChange = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      proofType: value as 'TEXT' | 'PHOTO' | 'AUDIO' | 'FILE',
+    }));
+  };
+
   const validateForm = (): string | null => {
     if (!formData.title.trim()) return 'Task title is required';
     if (!formData.description.trim()) return 'Task description is required';
     if (!formData.instructions.trim()) return 'Task instructions are required';
     
     const piReward = parseFloat(formData.piReward);
-    if (isNaN(piReward) || piReward <= 0) return 'Pi reward must be a positive number';
+    if (isNaN(piReward) || piReward < 0.01) return 'Pi reward must be at least 0.01π';
     
     const slots = parseInt(formData.slots, 10);
-    if (isNaN(slots) || slots <= 0) return 'Number of slots must be a positive number';
+    if (isNaN(slots) || slots < 1 || slots > 100) return 'Number of slots must be between 1 and 100';
     
-    if (!formData.deadline) return 'Deadline is required';
-    
-    const deadline = new Date(formData.deadline);
-    if (deadline <= new Date()) return 'Deadline must be in the future';
+    // Deadline is optional per requirements
+    if (formData.deadline) {
+      const deadline = new Date(formData.deadline);
+      if (deadline <= new Date()) return 'Deadline must be in the future';
+    }
 
     return null;
   };
@@ -110,60 +118,111 @@ export function CreateTaskModal({
     try {
       const slots = parseInt(formData.slots, 10);
       const piReward = parseFloat(formData.piReward);
+      const escrowAmount = piReward * slots;
 
-      console.log('📝 Creating new task:', {
+      console.log('💳 [STEP 1] Starting task creation with escrow payment:', {
         title: formData.title,
         employer: employerUsername,
         category: formData.category,
+        proofType: formData.proofType,
         reward: piReward,
         slots,
+        escrowAmount,
       });
 
-      const result = await createTask({
-        title: formData.title,
-        description: formData.description,
-        category: formData.category,
-        pi_reward: piReward,
-        time_estimate: 60, // Default 60 minutes
-        requirements: [],
-        slots_available: slots,
-        slots_remaining: slots,
-        deadline: new Date(formData.deadline).toISOString(),
-        employer_id: employerId,
-        task_status: 'available',
-        instructions: formData.instructions,
-      });
-
-      if (result) {
-        console.log('✅ Task created successfully:', {
-          id: result.id,
-          title: result.title,
-          reward: result.pi_reward,
-          slots: result.slots_remaining,
-        });
-
-        // Reset form
-        setFormData({
-          title: '',
-          description: '',
-          category: 'app-testing',
-          piReward: '',
-          slots: '',
-          deadline: '',
-          instructions: '',
-        });
-
-        setIsOpen(false);
-
-        // Trigger refresh
-        if (onTaskCreated) {
-          onTaskCreated();
+      // STEP 1: Request Pi escrow payment
+      const paymentApproved = new Promise<any>((resolve, reject) => {
+        if (!window.pay) {
+          console.warn('⚠️ Pi payment not available, skipping payment step');
+          resolve({ identifier: 'offline-test' });
+          return;
         }
-      } else {
-        setError('Failed to create task. Please try again.');
+
+        console.log('💰 [STEP 2] Initiating Pi escrow payment...');
+        window.pay?.({
+          amount: escrowAmount,
+          memo: `PiPulse task escrow: ${formData.title}`,
+          metadata: {
+            type: 'task_escrow',
+            title: formData.title,
+            employerId: employerId,
+            piReward: piReward,
+            slotsCount: slots,
+            category: formData.category,
+          },
+          onComplete: (paymentData: any) => {
+            console.log('✅ [STEP 3] Pi payment approved:', paymentData);
+            resolve(paymentData);
+          },
+          onError: (error: Error) => {
+            console.error('❌ [STEP 3] Pi payment failed:', error);
+            reject(error);
+          },
+        });
+      });
+
+      // Wait for payment to be approved
+      const paymentData = await paymentApproved;
+
+      console.log('🔐 [STEP 4] Payment approved, creating task in database...');
+
+      // STEP 2: Call API to create task
+      const response = await fetch('/api/tasks/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          category: formData.category,
+          proofType: formData.proofType,
+          piReward,
+          slotsAvailable: slots,
+          deadline: formData.deadline || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          employerId,
+          instructions: formData.instructions,
+          paymentId: paymentData?.identifier || null,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create task');
+      }
+
+      console.log('✅ [STEP 5] Task created successfully:', {
+        id: result.task?.id,
+        title: result.task?.title,
+        reward: result.task?.piReward,
+        slots: result.task?.slotsAvailable,
+      });
+
+      console.log('🎉 [STEP 6] Task posting complete!');
+
+      // Reset form
+      setFormData({
+        title: '',
+        description: '',
+        category: 'app-testing',
+        proofType: 'TEXT',
+        piReward: '',
+        slots: '',
+        deadline: '',
+        instructions: '',
+      });
+
+      setIsOpen(false);
+
+      // Show success message
+      setError(`✅ Task "${result.task?.title}" created with escrow of ${escrowAmount}π`);
+      setTimeout(() => setError(null), 5000);
+
+      // Trigger refresh
+      if (onTaskCreated) {
+        onTaskCreated();
       }
     } catch (err) {
-      console.error('Error creating task:', err);
+      console.error('❌ Error creating task:', err);
       setError(
         err instanceof Error ? err.message : 'An error occurred while creating the task'
       );
@@ -177,14 +236,14 @@ export function CreateTaskModal({
       <DialogTrigger asChild>
         <Button className="rounded-full bg-primary hover:bg-primary/90 px-8 gap-2">
           <Plus className="w-4 h-4" />
-          Create New Task
+          Post New Task
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Task</DialogTitle>
+          <DialogTitle>Post New Task</DialogTitle>
           <DialogDescription>
-            Post a task for Pioneers to complete. Set the reward and choose how many workers you need.
+            Create a task for Pioneers to complete. The escrow amount will be deducted when you submit.
           </DialogDescription>
         </DialogHeader>
 
@@ -233,6 +292,22 @@ export function CreateTaskModal({
             </Select>
           </div>
 
+          {/* Proof Type */}
+          <div className="space-y-2">
+            <Label htmlFor="proofType">Proof Type Required</Label>
+            <Select value={formData.proofType} onValueChange={handleProofTypeChange} disabled={isLoading}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="TEXT">Text</SelectItem>
+                <SelectItem value="PHOTO">Photo</SelectItem>
+                <SelectItem value="AUDIO">Audio</SelectItem>
+                <SelectItem value="FILE">File</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Instructions */}
           <div className="space-y-2">
             <Label htmlFor="instructions">Detailed Instructions</Label>
@@ -255,9 +330,9 @@ export function CreateTaskModal({
                 id="piReward"
                 name="piReward"
                 type="number"
-                placeholder="e.g., 10"
-                step="0.1"
-                min="0"
+                placeholder="e.g., 0.1"
+                step="0.01"
+                min="0.01"
                 value={formData.piReward}
                 onChange={handleInputChange}
                 disabled={isLoading}
@@ -273,6 +348,7 @@ export function CreateTaskModal({
                 type="number"
                 placeholder="e.g., 5"
                 min="1"
+                max="100"
                 value={formData.slots}
                 onChange={handleInputChange}
                 disabled={isLoading}
@@ -280,9 +356,21 @@ export function CreateTaskModal({
             </div>
           </div>
 
+          {/* Escrow Calculation */}
+          {formData.piReward && formData.slots && (
+            <div className="p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg">
+              <p className="text-sm text-blue-400">
+                💰 <strong>Total Escrow:</strong> {(parseFloat(formData.piReward) * parseInt(formData.slots, 10)).toFixed(2)}π
+              </p>
+              <p className="text-xs text-blue-300 mt-1">
+                ({parseFloat(formData.piReward).toFixed(2)}π × {formData.slots} workers)
+              </p>
+            </div>
+          )}
+
           {/* Deadline */}
           <div className="space-y-2">
-            <Label htmlFor="deadline">Deadline</Label>
+            <Label htmlFor="deadline">Deadline <span className="text-xs text-gray-400">(optional)</span></Label>
             <Input
               id="deadline"
               name="deadline"

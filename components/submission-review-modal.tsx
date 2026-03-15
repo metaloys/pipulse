@@ -1,16 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { getWorkerHistoryWithEmployer } from '@/lib/database';
 import type { DatabaseTaskSubmission, DatabaseTask } from '@/lib/types';
-import { Clock, User, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
-import { releasePaymentToWorker, calculateWorkerPayment } from '@/lib/pi-payment-escrow';
-import { getUserById } from '@/lib/database';
+import { User, CheckCircle2, XCircle, AlertCircle, TrendingUp } from 'lucide-react';
 
 interface SubmissionReviewModalProps {
   isOpen: boolean;
@@ -20,6 +19,7 @@ interface SubmissionReviewModalProps {
   onClose: () => void;
   onApprove: (submissionId: string) => Promise<void>;
   onReject: (submissionId: string, reason: string) => Promise<void>;
+  onRequestRevision?: (submissionId: string, reason: string) => Promise<void>;
 }
 
 export function SubmissionReviewModal({
@@ -30,12 +30,32 @@ export function SubmissionReviewModal({
   onClose,
   onApprove,
   onReject,
+  onRequestRevision,
 }: SubmissionReviewModalProps) {
   const [rejectionReason, setRejectionReason] = useState('');
+  const [revisionReason, setRevisionReason] = useState('');
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isRequestingRevision, setIsRequestingRevision] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [showRevisionForm, setShowRevisionForm] = useState(false);
+  const [workerHistory, setWorkerHistory] = useState<{
+    totalTasks: number;
+    approved: number;
+    rejected: number;
+  } | null>(null);
+
+  // Fetch worker history when modal opens or when worker/task changes
+  useEffect(() => {
+    if (isOpen && submission && task) {
+      const fetchHistory = async () => {
+        const history = await getWorkerHistoryWithEmployer(submission.workerId, task.employerId);
+        setWorkerHistory(history);
+      };
+      fetchHistory();
+    }
+  }, [isOpen, submission, task]);
 
   const handleApprove = async () => {
     if (!submission || !task) return;
@@ -43,28 +63,8 @@ export function SubmissionReviewModal({
       setIsApproving(true);
       setError(null);
 
-      // Get worker details for payment
-      const worker = await getUserById(submission.worker_id);
-      if (!worker) {
-        throw new Error('Worker not found');
-      }
-
-      // Trigger Pi payment from PiPulse owner to worker
-      try {
-        console.log('💰 Initiating payment to worker...');
-        await releasePaymentToWorker(
-          task.id,
-          submission.worker_id,
-          worker.pi_username,
-          task.pi_reward
-        );
-        console.log('✅ Payment to worker completed');
-      } catch (paymentError) {
-        console.error('⚠️ Payment initiation warning (may retry):', paymentError);
-        // Continue with approval even if payment UI shows - backend may retry
-      }
-
-      // Approve the submission in database
+      // Call onApprove which calls the API endpoint
+      // The endpoint handles: submission approval, worker payment, earnings update, slots update
       await onApprove(submission.id);
       onClose();
     } catch (err) {
@@ -90,6 +90,27 @@ export function SubmissionReviewModal({
       setError(err instanceof Error ? err.message : 'Failed to reject submission');
     } finally {
       setIsRejecting(false);
+    }
+  };
+
+  const handleRequestRevision = async () => {
+    if (!submission || !revisionReason.trim()) {
+      setError('Please provide a reason for revision request');
+      return;
+    }
+    try {
+      setIsRequestingRevision(true);
+      setError(null);
+      if (onRequestRevision) {
+        await onRequestRevision(submission.id, revisionReason);
+      }
+      setRevisionReason('');
+      setShowRevisionForm(false);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to request revision');
+    } finally {
+      setIsRequestingRevision(false);
     }
   };
 
@@ -121,7 +142,7 @@ export function SubmissionReviewModal({
                 <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-primary">{task.pi_reward} π</p>
+                <p className="text-2xl font-bold text-primary">{task.piReward} π</p>
                 <p className="text-xs text-muted-foreground">reward</p>
               </div>
             </div>
@@ -138,28 +159,62 @@ export function SubmissionReviewModal({
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">Submitted</p>
                 <p className="text-sm font-semibold">
-                  {new Date(submission.submitted_at).toLocaleDateString()} {new Date(submission.submitted_at).toLocaleTimeString()}
+                  {new Date(submission.submittedAt).toLocaleDateString()} {new Date(submission.submittedAt).toLocaleTimeString()}
                 </p>
               </div>
             </div>
           </Card>
 
+          {/* Worker History with this Employer */}
+          {workerHistory && (
+            <Card className="glassmorphism p-4 border-blue-500/20 bg-blue-500/5">
+              <div className="flex items-start gap-3">
+                <TrendingUp className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-blue-300">Worker History with this Employer</p>
+                  <div className="flex gap-4 mt-2 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">Total Tasks</p>
+                      <p className="font-bold text-foreground">{workerHistory.totalTasks}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">✅ Approved</p>
+                      <p className="font-bold text-green-400">{workerHistory.approved}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">❌ Rejected</p>
+                      <p className="font-bold text-red-400">{workerHistory.rejected}</p>
+                    </div>
+                    {workerHistory.totalTasks > 0 && (
+                      <div>
+                        <p className="text-muted-foreground text-xs">Approval Rate</p>
+                        <p className="font-bold text-yellow-400">
+                          {Math.round((workerHistory.approved / workerHistory.totalTasks) * 100)}%
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Submission Type & Status */}
           <div className="flex gap-3">
             <Badge variant="secondary" className="text-sm">
-              {submissionTypeLabels[submission.submission_type]}
+              {submissionTypeLabels[submission.submissionType?.toLowerCase()] || submissionTypeLabels[submission.submissionType]}
             </Badge>
             <Badge
               variant="outline"
               className={`text-sm ${
-                submission.submission_status === 'approved'
+                submission.status === 'APPROVED'
                   ? 'bg-green-500/10 border-green-500/50 text-green-400'
-                  : submission.submission_status === 'rejected'
+                  : submission.status === 'REJECTED'
                   ? 'bg-red-500/10 border-red-500/50 text-red-400'
                   : 'border-white/10'
               }`}
             >
-              {submission.submission_status.charAt(0).toUpperCase() + submission.submission_status.slice(1)}
+              {submission.status}
             </Badge>
           </div>
 
@@ -168,18 +223,18 @@ export function SubmissionReviewModal({
             <Label className="text-base font-semibold">Worker's Proof</Label>
             <div className="glassmorphism p-4 border-white/10 rounded-lg bg-muted/30 max-h-48 overflow-y-auto">
               <p className="text-sm text-foreground whitespace-pre-wrap">
-                {submission.proof_content}
+                {submission.proofContent}
               </p>
             </div>
           </div>
 
           {/* Rejection Reason (if rejected) */}
-          {submission.submission_status === 'rejected' && submission.rejection_reason && (
+          {submission.status === 'REJECTED' && submission.rejectionReason && (
             <div className="space-y-3">
               <Label className="text-base font-semibold text-red-400">Rejection Reason</Label>
               <div className="glassmorphism p-4 border-red-500/50 rounded-lg bg-red-500/10 max-h-32 overflow-y-auto">
                 <p className="text-sm text-red-300 whitespace-pre-wrap">
-                  {submission.rejection_reason}
+                  {submission.rejectionReason}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
@@ -200,22 +255,22 @@ export function SubmissionReviewModal({
           )}
 
           {/* Payment Breakdown (before approval) */}
-          {submission.submission_status === 'pending' && (
+          {submission.status === 'SUBMITTED' && (
             <div className="glassmorphism p-4 rounded-lg bg-green-500/5 border border-green-500/20 space-y-3">
               <h4 className="font-semibold text-green-400">Payment Details</h4>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Task Reward:</span>
-                  <span className="font-semibold">{task.pi_reward} π</span>
+                  <span className="font-semibold">{task.piReward} π</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">PiPulse Fee (15%):</span>
-                  <span className="font-semibold text-orange-400">{(parseFloat(String((task.pi_reward || 0) * 0.15)) || 0).toFixed(2)} π</span>
+                  <span className="font-semibold text-orange-400">{(parseFloat(String((task.piReward || 0) * 0.15)) || 0).toFixed(2)} π</span>
                 </div>
                 <div className="h-px bg-white/10 my-2" />
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-semibold">Worker Receives:</span>
-                  <span className="font-bold text-green-400">{(parseFloat(String((task.pi_reward || 0) * 0.85)) || 0).toFixed(2)} π</span>
+                  <span className="font-bold text-green-400">{(parseFloat(String((task.piReward || 0) * 0.85)) || 0).toFixed(2)} π</span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-3">
@@ -225,14 +280,21 @@ export function SubmissionReviewModal({
           )}
 
           {/* Action Buttons */}
-          {submission.submission_status === 'submitted' ? (
+          {submission.status === 'SUBMITTED' ? (
             <>
-              {!showRejectForm ? (
-                <div className="flex gap-3 pt-4 border-t border-white/10">
+              {!showRejectForm && !showRevisionForm ? (
+                <div className="flex gap-2 pt-4 border-t border-white/10">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowRevisionForm(true)}
+                    className="flex-1 rounded-lg border-white/10 hover:border-orange-500/50 hover:text-orange-400"
+                  >
+                    📝 Request Revision
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() => setShowRejectForm(true)}
-                    className="flex-1 rounded-lg border-white/10"
+                    className="flex-1 rounded-lg border-white/10 hover:border-red-500/50 hover:text-red-400"
                   >
                     <XCircle className="w-4 h-4 mr-2" />
                     Reject
@@ -245,6 +307,42 @@ export function SubmissionReviewModal({
                     <CheckCircle2 className="w-4 h-4 mr-2" />
                     {isApproving ? 'Approving...' : 'Approve & Pay'}
                   </Button>
+                </div>
+              ) : showRevisionForm ? (
+                <div className="space-y-3 pt-4 border-t border-white/10">
+                  <div>
+                    <Label htmlFor="revision-reason" className="text-sm font-semibold">
+                      Why do you need a revision?
+                    </Label>
+                    <Textarea
+                      id="revision-reason"
+                      placeholder="Describe what needs to be improved or changed..."
+                      value={revisionReason}
+                      onChange={(e) => setRevisionReason(e.target.value)}
+                      className="mt-2 min-h-24 bg-muted border-white/10 rounded-lg"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Minimum 10 characters required</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowRevisionForm(false);
+                        setRevisionReason('');
+                      }}
+                      disabled={isRequestingRevision}
+                      className="flex-1 rounded-lg border-white/10"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleRequestRevision}
+                      disabled={isRequestingRevision || (revisionReason.trim().length < 10)}
+                      className="flex-1 rounded-lg bg-orange-500 hover:bg-orange-600"
+                    >
+                      {isRequestingRevision ? 'Requesting...' : 'Request Revision'}
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3 pt-4 border-t border-white/10">
@@ -259,6 +357,7 @@ export function SubmissionReviewModal({
                       onChange={(e) => setRejectionReason(e.target.value)}
                       className="mt-2 min-h-24 bg-muted border-white/10 rounded-lg"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Minimum 10 characters required</p>
                   </div>
                   <div className="flex gap-3">
                     <Button
@@ -274,7 +373,7 @@ export function SubmissionReviewModal({
                     </Button>
                     <Button
                       onClick={handleReject}
-                      disabled={isRejecting || !rejectionReason.trim()}
+                      disabled={isRejecting || (rejectionReason.trim().length < 10)}
                       className="flex-1 rounded-lg bg-red-500 hover:bg-red-600"
                     >
                       {isRejecting ? 'Rejecting...' : 'Confirm Rejection'}

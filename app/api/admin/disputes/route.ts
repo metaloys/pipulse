@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseClient();
 
     const { data: disputes, error } = await supabase
-      .from('disputes')
+      .from('Dispute')
       .select(`
         id,
         task_id,

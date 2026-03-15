@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseClient();
 
     const { error } = await supabase
-      .from('task_submissions')
+      .from('Submission')
       .update({
         status: 'approved',
         reviewed_at: new Date().toISOString(),

@@ -9,7 +9,6 @@ import React, {
 } from "react";
 import { PI_NETWORK_CONFIG, BACKEND_URLS } from "@/lib/system-config";
 import { api, setApiAuthToken } from "@/lib/api";
-import { createOrUpdateUserOnAuth } from "@/lib/database";
 import {
   initializeGlobalPayment,
   checkIncompletePayments,
@@ -77,6 +76,7 @@ interface PiAuthContextType {
   hasError: boolean;
   piAccessToken: string | null;
   userData: LoginDTO | null;
+  user: any | null; // Full user object from tRPC with id, piUsername, userRole, level, totalEarnings, status
   error: string | null;
   reinitialize: () => Promise<void>;
   appId: string | null;
@@ -237,6 +237,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   const [hasError, setHasError] = useState(false);
   const [piAccessToken, setPiAccessToken] = useState<string | null>(null);
   const [userData, setUserData] = useState<LoginDTO | null>(null);
+  const [user, setUser] = useState<any | null>(null); // Full user object from tRPC
   const [error, setError] = useState<string | null>(null);
   const [appId, setAppId] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
@@ -286,18 +287,47 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
 
     const userData = await loginToBackend(accessToken, appId);
 
-    // Auto-create or update user in database
+    // Call REST API to create/get user from database
     try {
-      await createOrUpdateUserOnAuth(userData.id, userData.username);
-    } catch (error) {
-      console.error("Failed to create/update user in database:", error);
-      // Don't block authentication if user creation fails
-    }
+      console.log(`📝 Creating/fetching user via API with piUid: ${userData.id}, piUsername: ${userData.username}`);
+      
+      const response = await fetch('/api/auth/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ piUid: userData.id, piUsername: userData.username }),
+      });
+      
+      const data = await response.json();
+      const user = data.user;
 
-    setPiAccessToken(accessToken);
-    setApiAuthToken(accessToken);
-    setUserData(userData);
-    setAppId(userData.app_id);
+      if (user) {
+        console.log(`✅ User created/fetched successfully:`, {
+          userId: user.id,
+          piUsername: user.piUsername,
+          userRole: user.userRole,
+          level: user.level,
+          totalEarnings: user.totalEarnings,
+          status: user.status,
+        });
+
+        // Store both the Pi user data and the full user object from database
+        setPiAccessToken(accessToken);
+        setApiAuthToken(accessToken);
+        setUserData(userData);
+        setUser(user); // Store full user object for accessing user.id, role, etc.
+        setAppId(userData.app_id);
+      } else {
+        throw new Error('Failed to create/fetch user from database');
+      }
+    } catch (error) {
+      console.error("Failed to create/fetch user:", error);
+      // Don't block authentication if user creation fails - let app continue
+      // But log the error for debugging
+      setPiAccessToken(accessToken);
+      setApiAuthToken(accessToken);
+      setUserData(userData);
+      setAppId(userData.app_id);
+    }
   };
 
   const getErrorMessage = (error: unknown): string => {
@@ -332,11 +362,17 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       setAuthMessage("Initializing Pi Network...");
       console.log("📍 Initializing Pi SDK with config:", PI_NETWORK_CONFIG);
       
+      const piAppId = process.env.NEXT_PUBLIC_PI_APP_ID;
+      if (!piAppId) {
+        throw new Error("NEXT_PUBLIC_PI_APP_ID environment variable is not set");
+      }
+      
+      console.log(`📝 Initializing Pi SDK with App ID: ${piAppId}`);
       await window.Pi.init({
         version: "2.0",
         sandbox: PI_NETWORK_CONFIG.SANDBOX,
       });
-      console.log("✅ Pi SDK initialized successfully");
+      console.log("✅ Pi SDK initialized successfully with App ID:", piAppId);
 
       setAuthMessage("Authenticating with Pi Network...");
       const scopes = ["username", "payments"];
@@ -439,6 +475,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     hasError,
     piAccessToken,
     userData,
+    user,
     error,
     reinitialize: initializePiAndAuthenticate,
     appId,

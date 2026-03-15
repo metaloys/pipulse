@@ -10,8 +10,7 @@ import { EmployerDashboard } from '@/components/employer-dashboard';
 import { CreateTaskModal } from '@/components/create-task-modal';
 import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
-import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById, updateTask, switchUserRole } from '@/lib/database';
-import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry, UserStats } from '@/lib/types';
+import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry, UserStats, Task } from '@/lib/types';
 import { 
   Coins, 
   CheckCircle, 
@@ -33,14 +32,26 @@ const EMPTY_STATS: UserStats = {
 };
 
 export default function HomePage() {
-  const { userData } = usePiAuth();
+  const { userData, user } = usePiAuth();
   
-  const [userRole, setUserRole] = useState<UserRole>('worker');
+  // Get userRole from tRPC user object if available, otherwise default to 'worker'
+  const [userRole, setUserRole] = useState<UserRole>((user?.userRole as UserRole) || 'worker');
   const [selectedCategory, setSelectedCategory] = useState<TaskCategory | 'all'>('all');
   const [tasks, setTasks] = useState<DatabaseTask[]>([]);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [employerTasks, setEmployerTasks] = useState<DatabaseTask[]>([]);
-  const [userStats, setUserStats] = useState<UserStats>(EMPTY_STATS);
+  
+  // Initialize userStats from tRPC user object
+  const [userStats, setUserStats] = useState<UserStats>({
+    dailyEarnings: 0,
+    weeklyEarnings: 0,
+    totalEarnings: user?.totalEarnings || 0,
+    tasksCompleted: user?.totalTasksCompleted || 0,
+    currentStreak: user?.currentStreak || 0,
+    level: user?.level || 'NEWCOMER',
+    availableTasksCount: 0,
+  });
+  
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<DatabaseTask | null>(null);
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
@@ -49,12 +60,20 @@ export default function HomePage() {
   // Load user's current role from database
   useEffect(() => {
     const loadUserRole = async () => {
+      // If we have the full user object from tRPC, use it directly
+      if (user?.id && user?.userRole) {
+        console.log('📋 User role from tRPC context:', user.userRole);
+        setUserRole(user.userRole as UserRole);
+        return;
+      }
+      
+      // Fallback for old flow (if needed)
       if (userData?.id) {
         try {
-          const user = await getUserById(userData.id);
-          if (user) {
-            console.log('📋 User role from database:', user.user_role);
-            setUserRole(user.user_role);
+          const fetchedUser = await getUserById(userData.id);
+          if (fetchedUser) {
+            console.log('📋 User role from database:', fetchedUser.user_role);
+            setUserRole(fetchedUser.user_role);
           }
         } catch (error) {
           console.error('Error loading user role:', error);
@@ -62,61 +81,78 @@ export default function HomePage() {
       }
     };
     loadUserRole();
-  }, [userData?.id]);
+  }, [user, userData?.id]);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
         
-        // Fetch real tasks from Supabase
-        const tasksData = await getAllTasks();
+        // Fetch real tasks from API
+        const tasksResponse = await fetch('/api/tasks/list');
+        const tasksData = await tasksResponse.json();
         
         // Filter out user's own tasks when in worker mode
-        // (a user shouldn't accept their own tasks)
-        let availableTasks = tasksData;
-        if (userRole === 'worker' && userData?.id) {
-          availableTasks = tasksData.filter(task => task.employer_id !== userData.id);
-          console.log(`📋 Filtered tasks: ${tasksData.length} total, ${availableTasks.length} available for worker (excluded ${tasksData.length - availableTasks.length} own tasks)`);
+        let availableTasks = tasksData.tasks || [];
+        if (userRole === 'worker' && user?.id) {
+          availableTasks = availableTasks.filter((task: any) => task.employerId !== user.id);
+          console.log(`📋 Filtered tasks: ${tasksData.tasks?.length} total, ${availableTasks.length} available for worker (excluded ${(tasksData.tasks?.length || 0) - availableTasks.length} own tasks)`);
         }
         
         setTasks(availableTasks);
         
-        // Fetch real leaderboard from Supabase
-        const leaderboardData = await getLeaderboard(10);
-        const formattedLeaderboard = leaderboardData.map((entry, index) => ({
-          rank: index + 1,
-          username: entry.pi_username,
-          earnings: entry.total_earnings,
-          tasksCompleted: entry.total_tasks_completed,
-        }));
-        setLeaderboardEntries(formattedLeaderboard);
+        // Fetch real leaderboard from API
+        try {
+          const leaderboardResponse = await fetch('/api/leaderboard');
+          const leaderboardData = await leaderboardResponse.json();
+          const entries = leaderboardData.leaderboard || [];
+          const formattedLeaderboard = entries.map((entry: any, index: number) => ({
+            rank: index + 1,
+            username: entry.piUsername,
+            earnings: entry.totalEarnings,
+            tasksCompleted: entry.totalTasksCompleted,
+          }));
+          setLeaderboardEntries(formattedLeaderboard);
+        } catch (err) {
+          console.error('Error fetching leaderboard:', err);
+        }
 
         // Fetch real user stats if logged in
-        if (userData?.id) {
-          const realStats = await getUserStats(userData.id);
-          if (realStats) {
-            console.log('📊 User stats loaded from database:', {
-              userId: userData.id,
-              dailyEarnings: realStats.dailyEarnings,
-              weeklyEarnings: realStats.weeklyEarnings,
-              totalEarnings: realStats.totalEarnings,
-              tasksCompleted: realStats.tasksCompleted,
-              level: realStats.level,
-              currentStreak: realStats.currentStreak,
-            });
-            setUserStats(realStats);
-          } else {
-            console.warn('⚠️ No stats returned for user:', userData.id);
+        if (user?.id) {
+          try {
+            const statsResponse = await fetch(`/api/users/stats?userId=${user.id}`);
+            const statsData = await statsResponse.json();
+            const stats = statsData.stats;
+            if (stats) {
+              console.log('📊 User stats loaded from API:', {
+                userId: user.id,
+                dailyEarnings: stats.dailyEarnings,
+                weeklyEarnings: stats.weeklyEarnings,
+                totalEarnings: stats.totalEarnings,
+                tasksCompleted: stats.tasksCompleted,
+                level: stats.level,
+                currentStreak: stats.currentStreak,
+              });
+              setUserStats(stats);
+            } else {
+              console.warn('⚠️ No stats returned for user:', user.id);
+            }
+          } catch (err) {
+            console.error('Error fetching user stats:', err);
           }
         } else {
-          console.warn('⚠️ userData.id not available');
+          console.warn('⚠️ user.id not available');
         }
 
         // If user is an employer, load their tasks
-        if (userData?.id && userRole === 'employer') {
-          const userEmployerTasks = await getTasksByEmployer(userData.id);
-          setEmployerTasks(userEmployerTasks);
+        if (user?.id && userRole === 'employer') {
+          try {
+            const employerTasksResponse = await fetch(`/api/tasks/employer?employerId=${user.id}`);
+            const employerTasksData = await employerTasksResponse.json();
+            setEmployerTasks(employerTasksData.tasks || []);
+          } catch (err) {
+            console.error('Error fetching employer tasks:', err);
+          }
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -126,10 +162,10 @@ export default function HomePage() {
     };
 
     loadData();
-  }, [userData?.id, userRole]);
+  }, [userData?.id, userRole, user?.id]);
 
   const handleRoleSwitch = async () => {
-    if (!userData?.id || isRoleSwitching) return;
+    if (!user?.id || isRoleSwitching) return;
 
     setIsRoleSwitching(true);
     const newRole = userRole === 'worker' ? 'employer' : 'worker';
@@ -137,11 +173,26 @@ export default function HomePage() {
     try {
       console.log(`🔄 Switching user role from ${userRole} to ${newRole}...`);
 
-      const result = await switchUserRole(userData.id, newRole);
+      // Call the switch-role API endpoint
+      const response = await fetch('/api/auth/switch-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          newRole: newRole,
+        }),
+      });
 
-      if (result) {
-        console.log(`✅ User role updated to ${newRole}:`, result.user_role);
-        setUserRole(newRole);
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ Failed to switch role:', result.error);
+        throw new Error(result.error || 'Failed to switch role');
+      }
+
+      if (result.user) {
+        console.log(`✅ User role updated to ${newRole}:`, result.user.userRole);
+        setUserRole(newRole as UserRole);
 
         // Clear employer tasks if switching to worker
         if (newRole === 'worker') {
@@ -157,19 +208,26 @@ export default function HomePage() {
     }
   };
 
-  const handleAcceptTask = (task: DatabaseTask) => {
-    setSelectedTask(task);
+  const handleAcceptTask = (task: DatabaseTask | Task) => {
+    setSelectedTask(task as DatabaseTask);
     setIsSubmissionModalOpen(true);
   };
 
-  const handleSubmitTask = async (taskId: string, proof: string, submissionType: 'text' | 'photo' | 'audio' | 'file') => {
+  const handleSubmitTask = async (taskId: string, proof: string, submissionType: 'TEXT' | 'PHOTO' | 'AUDIO' | 'FILE') => {
     try {
-      // Get the worker ID from Pi Auth context
-      if (!userData?.id) {
+      console.log('Task fields:', JSON.stringify({
+        piReward: undefined, // Will check after we get currentTask
+        pi_reward: undefined,
+        reward: undefined,
+        allKeys: undefined
+      }));
+
+      // Get the worker ID from Pi Auth context (use database user ID, not Pi user ID)
+      if (!user?.id) {
         throw new Error('User not authenticated. Please login with Pi Network.');
       }
 
-      const workerId = userData.id;
+      const workerId = user.id;
       
       console.log(`📝 Submitting task proof for task: ${taskId}`);
       
@@ -178,41 +236,56 @@ export default function HomePage() {
       if (!currentTask) {
         throw new Error('Task not found');
       }
+
+      console.log('Task fields:', JSON.stringify({
+        piReward: (currentTask as any).piReward,
+        pi_reward: (currentTask as any).pi_reward,
+        reward: (currentTask as any).reward,
+        allKeys: Object.keys(currentTask)
+      }));
+
+      console.log('🔍 Task object:', JSON.stringify(currentTask));
       
-      // 1. Create the submission record with agreed_reward for price protection
-      const submission = await submitTask({
-        task_id: taskId,
-        worker_id: workerId,
-        proof_content: proof,
-        submission_type: submissionType,
-        submission_status: 'submitted',
-        rejection_reason: null,
-        agreed_reward: currentTask.pi_reward, // Store the price worker agreed to
-        submitted_at: new Date().toISOString(),
-        reviewed_at: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      // STEP 2: Submit proof without payment (escrow model)
+      // Worker submits proof → employer approves → system releases funds from escrow
+      console.log('✅ [STEP 2] Proof submitted, awaiting employer review');
+      
+      // STEP 3: Create the submission record via API
+      console.log(`✅ [STEP 3] Creating submission record...`);
+      const submitResponse = await fetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId,
+          workerId,
+          proofContent: proof,
+          submissionType,
+          agreedReward: currentTask.piReward ?? currentTask.pi_reward ?? 0,
+        }),
       });
 
+      const submitData = await submitResponse.json();
+      if (!submitResponse.ok) {
+        throw new Error(submitData.error || 'Failed to save submission');
+      }
+
+      const submission = submitData.submission;
       if (!submission) {
         throw new Error('Failed to save submission');
       }
 
-      console.log(`✅ Task submitted successfully with ID: ${submission.id}`);
+      console.log(`✅ [STEP 4] Task submission created with ID: ${submission.id}`);
       
-      // 2. Decrement the slots_remaining for this task
-      const newSlotsRemaining = Math.max(0, currentTask.slots_remaining - 1);
-      await updateTask(taskId, {
-        slots_remaining: newSlotsRemaining,
-      });
-      console.log(`📉 Task slots updated: ${currentTask.slots_remaining} → ${newSlotsRemaining}`);
-      
-      // 3. Refresh tasks after submission
-      const updatedTasks = await getAllTasks();
-      const availableTasks = userRole === 'worker' && userData?.id 
-        ? updatedTasks.filter(t => t.employer_id !== userData.id)
+      // STEP 5: Refresh tasks after submission
+      console.log(`🔄 [STEP 5] Refreshing task list...`);
+      const updatedTasksResponse = await fetch('/api/tasks/list');
+      const updatedTasksData = await updatedTasksResponse.json();
+      const updatedTasks = updatedTasksData.tasks || [];
+      const availableTasks = userRole === 'worker' && user?.id 
+        ? updatedTasks.filter((t: any) => t.employerId !== user.id)
         : updatedTasks;
       setTasks(availableTasks);
+      console.log(`✅ [STEP 5] Task acceptance complete!`);
       
     } catch (error) {
       console.error('Error submitting task:', error);
@@ -319,7 +392,7 @@ export default function HomePage() {
               </div>
 
               <div className="space-y-6">
-                <Leaderboard entries={leaderboardEntries} />
+                <Leaderboard />
                 
                 {/* Quick Stats */}
                 <div className="glassmorphism p-5 border-white/10 rounded-lg">
@@ -377,18 +450,18 @@ export default function HomePage() {
               />
               <StatsCard
                 label="Total Reward"
-                value={`${employerTasks.reduce((sum, t) => sum + t.pi_reward, 0)} π`}
+                value={`${employerTasks.reduce((sum, t) => sum + (t.piReward ?? t.pi_reward ?? 0), 0)} π`}
                 icon={<Coins className="w-8 h-8" />}
               />
               <StatsCard
                 label="Slots Available"
-                value={employerTasks.reduce((sum, t) => sum + t.slots_remaining, 0)}
+                value={employerTasks.reduce((sum, t) => sum + (t.slotsRemaining ?? t.slots_remaining ?? 0), 0)}
                 icon={<CheckCircle className="w-8 h-8" />}
               />
             </div>
 
-            {userData?.id && employerTasks.length > 0 ? (
-              <EmployerDashboard employerId={userData.id} employerTasks={employerTasks} />
+            {user?.id && employerTasks.length > 0 ? (
+              <EmployerDashboard employerId={user.id} employerTasks={employerTasks} />
             ) : (
               <div className="glassmorphism p-8 border-white/10 rounded-lg text-center">
                 <Plus className="w-12 h-12 text-primary mx-auto mb-4" />
@@ -398,9 +471,9 @@ export default function HomePage() {
                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
                   Get work done by verified Pioneers. Pay only for completed tasks with Pi coins.
                 </p>
-                {userData?.id && userData.username && (
+                {user?.id && userData.username && (
                   <CreateTaskModal
-                    employerId={userData.id}
+                    employerId={user.id}
                     employerUsername={userData.username}
                     onTaskCreated={() => {
                       // Reload employer tasks

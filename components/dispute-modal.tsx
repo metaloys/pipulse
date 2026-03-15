@@ -58,6 +58,10 @@ export function DisputeModal({
         dispute_reason: disputeReason,
         original_rejection_reason: submission.rejection_reason,
         dispute_status: 'pending',
+        admin_ruling: null,
+        admin_notes: null,
+        admin_id: null,
+        resolved_at: null,
         pi_amount_in_dispute: task.pi_reward,
       });
 

@@ -14,6 +14,8 @@ import {
   canUserAccessEmployerMode,
 } from '@/lib/database';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
