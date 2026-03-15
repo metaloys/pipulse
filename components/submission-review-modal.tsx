@@ -19,6 +19,7 @@ interface SubmissionReviewModalProps {
   onClose: () => void;
   onApprove: (submissionId: string) => Promise<void>;
   onReject: (submissionId: string, reason: string) => Promise<void>;
+  onRequestRevision?: (submissionId: string, reason: string) => Promise<void>;
 }
 
 export function SubmissionReviewModal({
@@ -29,12 +30,16 @@ export function SubmissionReviewModal({
   onClose,
   onApprove,
   onReject,
+  onRequestRevision,
 }: SubmissionReviewModalProps) {
   const [rejectionReason, setRejectionReason] = useState('');
+  const [revisionReason, setRevisionReason] = useState('');
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isRequestingRevision, setIsRequestingRevision] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [showRevisionForm, setShowRevisionForm] = useState(false);
   const [workerHistory, setWorkerHistory] = useState<{
     totalTasks: number;
     approved: number;
@@ -85,6 +90,27 @@ export function SubmissionReviewModal({
       setError(err instanceof Error ? err.message : 'Failed to reject submission');
     } finally {
       setIsRejecting(false);
+    }
+  };
+
+  const handleRequestRevision = async () => {
+    if (!submission || !revisionReason.trim()) {
+      setError('Please provide a reason for revision request');
+      return;
+    }
+    try {
+      setIsRequestingRevision(true);
+      setError(null);
+      if (onRequestRevision) {
+        await onRequestRevision(submission.id, revisionReason);
+      }
+      setRevisionReason('');
+      setShowRevisionForm(false);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to request revision');
+    } finally {
+      setIsRequestingRevision(false);
     }
   };
 
@@ -256,12 +282,19 @@ export function SubmissionReviewModal({
           {/* Action Buttons */}
           {submission.status === 'SUBMITTED' ? (
             <>
-              {!showRejectForm ? (
-                <div className="flex gap-3 pt-4 border-t border-white/10">
+              {!showRejectForm && !showRevisionForm ? (
+                <div className="flex gap-2 pt-4 border-t border-white/10">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowRevisionForm(true)}
+                    className="flex-1 rounded-lg border-white/10 hover:border-orange-500/50 hover:text-orange-400"
+                  >
+                    📝 Request Revision
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() => setShowRejectForm(true)}
-                    className="flex-1 rounded-lg border-white/10"
+                    className="flex-1 rounded-lg border-white/10 hover:border-red-500/50 hover:text-red-400"
                   >
                     <XCircle className="w-4 h-4 mr-2" />
                     Reject
@@ -274,6 +307,42 @@ export function SubmissionReviewModal({
                     <CheckCircle2 className="w-4 h-4 mr-2" />
                     {isApproving ? 'Approving...' : 'Approve & Pay'}
                   </Button>
+                </div>
+              ) : showRevisionForm ? (
+                <div className="space-y-3 pt-4 border-t border-white/10">
+                  <div>
+                    <Label htmlFor="revision-reason" className="text-sm font-semibold">
+                      Why do you need a revision?
+                    </Label>
+                    <Textarea
+                      id="revision-reason"
+                      placeholder="Describe what needs to be improved or changed..."
+                      value={revisionReason}
+                      onChange={(e) => setRevisionReason(e.target.value)}
+                      className="mt-2 min-h-24 bg-muted border-white/10 rounded-lg"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Minimum 10 characters required</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowRevisionForm(false);
+                        setRevisionReason('');
+                      }}
+                      disabled={isRequestingRevision}
+                      className="flex-1 rounded-lg border-white/10"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleRequestRevision}
+                      disabled={isRequestingRevision || (revisionReason.trim().length < 10)}
+                      className="flex-1 rounded-lg bg-orange-500 hover:bg-orange-600"
+                    >
+                      {isRequestingRevision ? 'Requesting...' : 'Request Revision'}
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3 pt-4 border-t border-white/10">
@@ -288,6 +357,7 @@ export function SubmissionReviewModal({
                       onChange={(e) => setRejectionReason(e.target.value)}
                       className="mt-2 min-h-24 bg-muted border-white/10 rounded-lg"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Minimum 10 characters required</p>
                   </div>
                   <div className="flex gap-3">
                     <Button
@@ -303,7 +373,7 @@ export function SubmissionReviewModal({
                     </Button>
                     <Button
                       onClick={handleReject}
-                      disabled={isRejecting || !rejectionReason.trim()}
+                      disabled={isRejecting || (rejectionReason.trim().length < 10)}
                       className="flex-1 rounded-lg bg-red-500 hover:bg-red-600"
                     >
                       {isRejecting ? 'Rejecting...' : 'Confirm Rejection'}

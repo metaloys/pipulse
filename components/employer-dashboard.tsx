@@ -166,25 +166,82 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
 
   const handleRejectSubmission = async (submissionId: string, reason: string) => {
     try {
-      // Call the reject endpoint
+      // Find the submission to get the worker ID
+      const submission = submissions.find(s => s.submission.id === submissionId);
+      if (!submission) {
+        throw new Error('Submission not found');
+      }
+
+      // Call the reject endpoint with correct field names
       const response = await fetch('/api/submissions/reject', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           submissionId,
-          reason,
+          rejectionReason: reason,
+          workerId: submission.submission.workerId,
         }),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to reject submission');
+        console.error('❌ Rejection failed:', {
+          status: response.status,
+          error: responseData.error,
+          response: responseData,
+        });
+        throw new Error(responseData.error || 'Failed to reject submission');
       }
+
+      console.log('✅ Submission rejected successfully');
 
       // Reload submissions
       await loadSubmissions();
       setIsReviewModalOpen(false);
     } catch (err) {
       console.error('Error rejecting submission:', err);
+      throw err;
+    }
+  };
+
+  const handleRequestRevision = async (submissionId: string, reason: string) => {
+    try {
+      // Find the submission to get the worker ID
+      const submission = submissions.find(s => s.submission.id === submissionId);
+      if (!submission) {
+        throw new Error('Submission not found');
+      }
+
+      // Call the request revision endpoint
+      const response = await fetch('/api/submissions/request-revision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissionId,
+          revisionReason: reason,
+          workerId: submission.submission.workerId,
+        }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ Revision request failed:', {
+          status: response.status,
+          error: responseData.error,
+          response: responseData,
+        });
+        throw new Error(responseData.error || 'Failed to request revision');
+      }
+
+      console.log('✅ Revision requested successfully');
+
+      // Reload submissions
+      await loadSubmissions();
+      setIsReviewModalOpen(false);
+    } catch (err) {
+      console.error('Error requesting revision:', err);
       throw err;
     }
   };
@@ -414,6 +471,7 @@ export function EmployerDashboard({ employerId, employerTasks }: EmployerDashboa
         onClose={() => setIsReviewModalOpen(false)}
         onApprove={handleApproveSubmission}
         onReject={handleRejectSubmission}
+        onRequestRevision={handleRequestRevision}
       />
 
       {/* Create Task Modal */}
