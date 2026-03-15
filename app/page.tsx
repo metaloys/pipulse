@@ -10,7 +10,6 @@ import { EmployerDashboard } from '@/components/employer-dashboard';
 import { CreateTaskModal } from '@/components/create-task-modal';
 import { Button } from '@/components/ui/button';
 import { usePiAuth } from '@/contexts/pi-auth-context';
-import { getAllTasks, getLeaderboard, submitTask, getTasksByEmployer, getUserStats, updateUser, getUserById, updateTask, switchUserRole } from '@/lib/database';
 import type { UserRole, TaskCategory, DatabaseTask, LeaderboardEntry, UserStats, Task } from '@/lib/types';
 import { 
   Coins, 
@@ -89,54 +88,71 @@ export default function HomePage() {
       try {
         setIsLoading(true);
         
-        // Fetch real tasks from Supabase
-        const tasksData = await getAllTasks();
+        // Fetch real tasks from API
+        const tasksResponse = await fetch('/api/tasks/list');
+        const tasksData = await tasksResponse.json();
         
         // Filter out user's own tasks when in worker mode
-        // (a user shouldn't accept their own tasks)
-        let availableTasks = tasksData;
+        let availableTasks = tasksData.tasks || [];
         if (userRole === 'worker' && user?.id) {
-          availableTasks = tasksData.filter(task => task.employerId !== user.id);
-          console.log(`📋 Filtered tasks: ${tasksData.length} total, ${availableTasks.length} available for worker (excluded ${tasksData.length - availableTasks.length} own tasks)`);
+          availableTasks = availableTasks.filter((task: any) => task.employerId !== user.id);
+          console.log(`📋 Filtered tasks: ${tasksData.tasks?.length} total, ${availableTasks.length} available for worker (excluded ${(tasksData.tasks?.length || 0) - availableTasks.length} own tasks)`);
         }
         
         setTasks(availableTasks);
         
-        // Fetch real leaderboard from Supabase
-        const leaderboardData = await getLeaderboard(10);
-        const formattedLeaderboard = leaderboardData.map((entry, index) => ({
-          rank: index + 1,
-          username: entry.piUsername,
-          earnings: entry.totalEarnings,
-          tasksCompleted: entry.totalTasksCompleted,
-        }));
-        setLeaderboardEntries(formattedLeaderboard);
+        // Fetch real leaderboard from API
+        try {
+          const leaderboardResponse = await fetch('/api/leaderboard');
+          const leaderboardData = await leaderboardResponse.json();
+          const entries = leaderboardData.leaderboard || [];
+          const formattedLeaderboard = entries.map((entry: any, index: number) => ({
+            rank: index + 1,
+            username: entry.piUsername,
+            earnings: entry.totalEarnings,
+            tasksCompleted: entry.totalTasksCompleted,
+          }));
+          setLeaderboardEntries(formattedLeaderboard);
+        } catch (err) {
+          console.error('Error fetching leaderboard:', err);
+        }
 
         // Fetch real user stats if logged in
         if (user?.id) {
-          const realStats = await getUserStats(user.id);
-          if (realStats) {
-            console.log('📊 User stats loaded from database:', {
-              userId: user.id,
-              dailyEarnings: realStats.dailyEarnings,
-              weeklyEarnings: realStats.weeklyEarnings,
-              totalEarnings: realStats.totalEarnings,
-              tasksCompleted: realStats.tasksCompleted,
-              level: realStats.level,
-              currentStreak: realStats.currentStreak,
-            });
-            setUserStats(realStats);
-          } else {
-            console.warn('⚠️ No stats returned for user:', user.id);
+          try {
+            const statsResponse = await fetch(`/api/users/stats?userId=${user.id}`);
+            const statsData = await statsResponse.json();
+            const stats = statsData.stats;
+            if (stats) {
+              console.log('📊 User stats loaded from API:', {
+                userId: user.id,
+                dailyEarnings: stats.dailyEarnings,
+                weeklyEarnings: stats.weeklyEarnings,
+                totalEarnings: stats.totalEarnings,
+                tasksCompleted: stats.tasksCompleted,
+                level: stats.level,
+                currentStreak: stats.currentStreak,
+              });
+              setUserStats(stats);
+            } else {
+              console.warn('⚠️ No stats returned for user:', user.id);
+            }
+          } catch (err) {
+            console.error('Error fetching user stats:', err);
           }
         } else {
-          console.warn('⚠️ userData.id not available');
+          console.warn('⚠️ user.id not available');
         }
 
         // If user is an employer, load their tasks
         if (user?.id && userRole === 'employer') {
-          const userEmployerTasks = await getTasksByEmployer(user.id);
-          setEmployerTasks(userEmployerTasks);
+          try {
+            const employerTasksResponse = await fetch(`/api/tasks/employer?employerId=${user.id}`);
+            const employerTasksData = await employerTasksResponse.json();
+            setEmployerTasks(employerTasksData.tasks || []);
+          } catch (err) {
+            console.error('Error fetching employer tasks:', err);
+          }
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -146,7 +162,7 @@ export default function HomePage() {
     };
 
     loadData();
-  }, [userData?.id, userRole]);
+  }, [userData?.id, userRole, user?.id]);
 
   const handleRoleSwitch = async () => {
     if (!user?.id || isRoleSwitching) return;
@@ -157,11 +173,25 @@ export default function HomePage() {
     try {
       console.log(`🔄 Switching user role from ${userRole} to ${newRole}...`);
 
-      // Call database function to switch role
-      const result = await switchUserRole(user.id, newRole as 'worker' | 'employer');
+      // Call the switch-role API endpoint
+      const response = await fetch('/api/auth/switch-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          newRole: newRole,
+        }),
+      });
 
-      if (result) {
-        console.log(`✅ User role updated to ${newRole}:`, result.userRole);
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ Failed to switch role:', result.error);
+        throw new Error(result.error || 'Failed to switch role');
+      }
+
+      if (result.user) {
+        console.log(`✅ User role updated to ${newRole}:`, result.user.userRole);
         setUserRole(newRole as UserRole);
 
         // Clear employer tasks if switching to worker
@@ -220,47 +250,42 @@ export default function HomePage() {
       // Worker submits proof → employer approves → system releases funds from escrow
       console.log('✅ [STEP 2] Proof submitted, awaiting employer review');
       
-      // STEP 3: Create the submission record
+      // STEP 3: Create the submission record via API
       console.log(`✅ [STEP 3] Creating submission record...`);
-      const submission = await submitTask({
-        task_id: taskId,
-        worker_id: workerId,
-        proof_content: proof,
-        submission_type: submissionType,
-        submission_status: 'SUBMITTED',
-        rejection_reason: null,
-        revision_number: 0,
-        revision_requested_reason: null,
-        revision_requested_at: null,
-        resubmitted_at: null,
-        employer_notes: null,
-        agreed_reward: currentTask.piReward ?? currentTask.pi_reward ?? 0, // Store the price worker agreed to
-        submitted_at: new Date().toISOString(),
-        reviewed_at: null,
+      const submitResponse = await fetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId,
+          workerId,
+          proofContent: proof,
+          submissionType,
+          agreedReward: currentTask.piReward ?? currentTask.pi_reward ?? 0,
+        }),
       });
 
+      const submitData = await submitResponse.json();
+      if (!submitResponse.ok) {
+        throw new Error(submitData.error || 'Failed to save submission');
+      }
+
+      const submission = submitData.submission;
       if (!submission) {
         throw new Error('Failed to save submission');
       }
 
       console.log(`✅ [STEP 4] Task submission created with ID: ${submission.id}`);
       
-      // STEP 4: Decrement the slotsRemaining for this task
-      console.log(`📉 [STEP 5] Decrementing task slots...`);
-      const newSlotsRemaining = Math.max(0, currentTask.slotsRemaining - 1);
-      await updateTask(taskId, {
-        slotsRemaining: newSlotsRemaining,
-      });
-      console.log(`✅ [STEP 5] Task slots updated: ${currentTask.slotsRemaining} → ${newSlotsRemaining}`);
-      
       // STEP 5: Refresh tasks after submission
-      console.log(`🔄 [STEP 6] Refreshing task list...`);
-      const updatedTasks = await getAllTasks();
-      const availableTasks = userRole === 'worker' && userData?.id 
-        ? updatedTasks.filter(t => t.employerId !== userData.id)
+      console.log(`🔄 [STEP 5] Refreshing task list...`);
+      const updatedTasksResponse = await fetch('/api/tasks/list');
+      const updatedTasksData = await updatedTasksResponse.json();
+      const updatedTasks = updatedTasksData.tasks || [];
+      const availableTasks = userRole === 'worker' && user?.id 
+        ? updatedTasks.filter((t: any) => t.employerId !== user.id)
         : updatedTasks;
       setTasks(availableTasks);
-      console.log(`✅ [STEP 6] Task acceptance complete!`);
+      console.log(`✅ [STEP 5] Task acceptance complete!`);
       
     } catch (error) {
       console.error('Error submitting task:', error);
