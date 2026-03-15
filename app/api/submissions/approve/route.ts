@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     // 2. Get worker to verify they exist
     const { data: workerData, error: workerError } = await supabase
       .from('User')
-      .select('id, piUsername, totalEarnings, totalTasksCompleted')
+      .select('id, piUid, piUsername, totalEarnings, totalTasksCompleted')
       .eq('id', workerId)
       .single();
 
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
             workerId: workerId,
             type: 'worker_payout',
           },
-          uid: workerId,
+          uid: workerData.piUid,
           payment_type: 'developer_to_user',
         }),
       });
