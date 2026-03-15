@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { SwitchRoleSchema, validateRequest } from '@/lib/validators';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Switch user role between WORKER and EMPLOYER
  * POST /api/auth/switch-role

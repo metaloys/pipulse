@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db';
 import { validateRequest } from '@/lib/validators';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Create a new task with Prisma
  * POST /api/tasks/create

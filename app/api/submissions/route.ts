@@ -20,6 +20,8 @@ import {
   getWorkerSubmissionStats,
 } from '@/lib/database';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/submissions/submit
  * Submit a new task submission or revision
